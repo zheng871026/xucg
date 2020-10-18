@@ -332,24 +332,25 @@ typedef struct ucg_collective {
      */
 
     struct {
-        void          *buf;     /**< buffer location to use */
+        void                 *buffer;  /**< buffer location to use */
         union {
-            int64_t    count;   /**< item count (not int - to consume space) */
-            const int *counts;  /**< item count array */
+            int64_t           count;   /**< item count (not int - to consume space) */
+            const int        *counts;  /**< item count array */
         };
         union {
-            size_t     dt_len;  /**< external datatype length */
-            size_t    *dts_len; /**< external datatype length array */
+            size_t            dt_len;  /**< external datatype length */
+            size_t           *dts_len; /**< external datatype length array */
         };
         union {
-            void      *dt_ext;  /**< external datatype context */
-            void      *dts_ext; /**< external datatype context array */
+            void             *dt_ext;  /**< external datatype context */
+            void             *dts_ext; /**< external datatype context array */
         };
         union {
-            size_t     stride;  /**< item stride */
-            const int *displs;  /**< item displacement array */
-            void      *op_ext;  /**< external reduce operation handle */
+            size_t            stride;  /**< item stride */
+            const int        *displs;  /**< item displacement array */
+            void             *op_ext;  /**< external reduce operation handle */
         };
+        uint64_t              reserved; /**< unused except padding, must be zero */
     } send, recv;
 
     /*
