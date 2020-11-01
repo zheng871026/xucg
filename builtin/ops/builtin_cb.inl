@@ -5,6 +5,7 @@
 
 #include "builtin_ops.h"
 
+#include <ucp/dt/dt.h>
 #include <ucs/debug/log.h>
 #include <ucs/type/status.h>
 #include <ucs/profile/profile.h>
@@ -164,6 +165,16 @@ static int ucg_builtin_comp_recv_one_cb(ucg_builtin_request_t *req,
     return 1;
 }
 
+static int ucg_builtin_comp_recv_noncontig_one_cb(ucg_builtin_request_t *req,
+    uint64_t offset, void *data, size_t length)
+{
+    printf("ucg_builtin_comp_recv_noncontig_one_cb(offset=%lu length=%lu)\n", offset, length);
+    req->op->recv_dt->ops.unpack(req->step->bcopy.unpack_state.dt.generic.state,
+                                 offset, data, length);
+    (void) ucg_builtin_comp_step_cb(req, NULL);
+    return 1;
+}
+
 static int ucg_builtin_comp_recv_one_then_send_cb(ucg_builtin_request_t *req,
     uint64_t offset, void *data, size_t length)
 {
@@ -177,6 +188,15 @@ static int ucg_builtin_comp_recv_many_cb(ucg_builtin_request_t *req,
     uint64_t offset, void *data, size_t length)
 {
     memcpy(req->step->recv_buffer + offset, data, length);
+    return ucg_builtin_comp_step_check_cb(req);
+}
+
+static int ucg_builtin_comp_recv_noncontig_many_cb(ucg_builtin_request_t *req,
+    uint64_t offset, void *data, size_t length)
+{
+    printf("ucg_builtin_comp_recv_noncontig_many_cb\n");
+    req->op->recv_dt->ops.unpack(req->step->bcopy.unpack_state.dt.generic.state,
+                                 offset, data, length);
     return ucg_builtin_comp_step_check_cb(req);
 }
 
@@ -306,7 +326,7 @@ static int ucg_builtin_comp_last_barrier_step_many_cb(ucg_builtin_request_t *req
     return 0;
 }
 
-static ucs_status_t ucg_builtin_step_select_callbacks(ucg_builtin_plan_phase_t *phase,
+static ucs_status_t ucg_builtin_step_select_callbacks(ucg_builtin_plan_phase_t *phase, int is_contig_recv,
                                                ucg_builtin_comp_recv_cb_t *recv_cb, int nonzero_length, int flags)
 {
     int is_pipelined  = flags & UCG_BUILTIN_OP_STEP_FLAG_PIPELINED;
@@ -334,8 +354,13 @@ static ucs_status_t ucg_builtin_step_select_callbacks(ucg_builtin_plan_phase_t *
             }
             break;
 
-        case UCG_PLAN_METHOD_SEND_TERMINAL:
         case UCG_PLAN_METHOD_RECV_TERMINAL:
+            if (!is_contig_recv) {
+                *recv_cb = is_single_msg ? ucg_builtin_comp_recv_noncontig_one_cb :
+                                           ucg_builtin_comp_recv_noncontig_many_cb;
+                break;
+            }
+        case UCG_PLAN_METHOD_SEND_TERMINAL:
         case UCG_PLAN_METHOD_SCATTER_TERMINAL:
             *recv_cb = is_single_msg ? ucg_builtin_comp_recv_one_cb :
                                     ucg_builtin_comp_recv_many_cb;
@@ -547,7 +572,94 @@ static void ucg_builtin_final_alltoall(ucg_builtin_request_t *req)
     temp_buffer = NULL;
 }
 
+static UCS_F_ALWAYS_INLINE void
+ucg_builtin_init_state(ucg_builtin_op_step_t *step, int is_pack,
+                       ucp_dt_generic_t *dt_gen,
+                       const ucg_collective_params_t *params)
+{
+    void *state_gen;
+
+    if (is_pack) {
+        state_gen = dt_gen->ops.start_pack(dt_gen->context, step->send_buffer,
+                                           params->send.count);
+
+        step->bcopy.pack_state.dt.generic.state = state_gen;
+    } else {
+        state_gen = dt_gen->ops.start_unpack(dt_gen->context, step->recv_buffer,
+                                             params->recv.count);
+
+        step->bcopy.unpack_state.dt.generic.state = state_gen;
+    }
+    // TODO: re-use ucp_request_send_state_init()+ucp_request_send_state_reset()
+}
+
+static UCS_F_ALWAYS_INLINE void
+ucg_builtin_finalize_state(ucg_builtin_op_step_t *step, int is_pack,
+                           ucp_dt_generic_t *dt_gen)
+{
+    if (is_pack) {
+        dt_gen->ops.finish(step->bcopy.pack_state.dt.generic.state);
+    } else {
+        dt_gen->ops.finish(step->bcopy.unpack_state.dt.generic.state);
+    }
+}
+
+static void ucg_builtin_init_pack(ucg_builtin_op_t *op)
+{
+    ucg_builtin_op_step_t *step = &op->steps[0];
+    do {
+        ucg_builtin_init_state(step, 1, op->send_dt, &op->super.params);
+    } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
+}
+
+static void ucg_builtin_init_unpack(ucg_builtin_op_t *op)
+{
+    ucg_builtin_op_step_t *step = &op->steps[0];
+    do {
+        ucg_builtin_init_state(step, 0, op->recv_dt, &op->super.params);
+    } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
+}
+
+static void ucg_builtin_init_pack_and_unpack(ucg_builtin_op_t *op)
+{
+    ucg_builtin_op_step_t *step = &op->steps[0];
+    do {
+        ucg_builtin_init_state(step, 1, op->send_dt, &op->super.params);
+        ucg_builtin_init_state(step, 0, op->recv_dt, &op->super.params);
+    } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
+}
+
+static void ucg_builtin_finalize_pack(ucg_builtin_request_t *req)
+{
+    ucg_builtin_op_t *op        = req->op;
+    ucg_builtin_op_step_t *step = &op->steps[0];
+    do {
+        ucg_builtin_finalize_state(step, 1, op->send_dt);
+    } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
+}
+
+static void ucg_builtin_finalize_unpack(ucg_builtin_request_t *req)
+{
+    ucg_builtin_op_t *op        = req->op;
+    ucg_builtin_op_step_t *step = &op->steps[0];
+    do {
+        ucg_builtin_finalize_state(step, 0, op->recv_dt);
+    } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
+}
+
+static void ucg_builtin_finalize_pack_and_unpack(ucg_builtin_request_t *req)
+{
+    ucg_builtin_op_t *op        = req->op;
+    ucg_builtin_op_step_t *step = &op->steps[0];
+    do {
+        ucg_builtin_finalize_state(step, 1, op->send_dt);
+        ucg_builtin_finalize_state(step, 0, op->recv_dt);
+    } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
+}
+
 static ucs_status_t ucg_builtin_op_select_callback(ucg_builtin_plan_t *plan,
+                                                   ucp_datatype_t send_dtype,
+                                                   ucp_datatype_t recv_dtype,
                                                    ucg_builtin_op_init_cb_t *init_cb,
                                                    ucg_builtin_op_final_cb_t *final_cb)
 {
@@ -584,8 +696,21 @@ static ucs_status_t ucg_builtin_op_select_callback(ucg_builtin_plan_t *plan,
             break;
 
         default:
-            *init_cb  = ucg_builtin_init_dummy;
-            *final_cb = NULL;
+            if (!UCP_DT_IS_CONTIG(send_dtype)) {
+                if (!UCP_DT_IS_CONTIG(recv_dtype)) {
+                    *init_cb  = ucg_builtin_init_pack_and_unpack;
+                    *final_cb = ucg_builtin_finalize_pack_and_unpack;
+                } else {
+                    *init_cb  = ucg_builtin_init_pack;
+                    *final_cb = ucg_builtin_finalize_pack;
+                }
+            } else if (!UCP_DT_IS_CONTIG(recv_dtype)) {
+                *init_cb  = ucg_builtin_init_unpack;
+                *final_cb = ucg_builtin_finalize_unpack;
+            } else {
+                *init_cb  = ucg_builtin_init_dummy;
+                *final_cb = NULL;
+            }
             break;
     }
 

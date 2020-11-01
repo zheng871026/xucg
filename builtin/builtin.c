@@ -1157,6 +1157,7 @@ static ucs_status_t ucg_builtin_plan(ucg_plan_component_t *plan_component,
     }
 
     ucs_list_add_head(&builtin_ctx->plan_head, &plan->list);
+    plan->convert_f = builtin_ctx->group_params->mpi_dt_convert;
     plan->resend    = &builtin_ctx->send_head;
     plan->slots     = &builtin_ctx->slots[0];
     plan->am_id     = builtin_ctx->am_id;

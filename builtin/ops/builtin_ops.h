@@ -147,11 +147,17 @@ typedef struct ucg_builtin_op_step {
     ucg_builtin_comp_recv_cb_t recv_cb;
 
     /* Fields intended for zero-copy */
+    union {
+    struct {
+        ucp_dt_state_t         pack_state;
+        ucp_dt_state_t         unpack_state;
+    } bcopy;
     struct {
         uct_mem_h              memh;
         ucg_builtin_zcomp_t   *zcomp;
         uint32_t               num_store; /* < number of step's store zcopy messages */
     } zcopy;
+    };
 } ucg_builtin_op_step_t;
 
 typedef struct ucg_builtin_comp_slot ucg_builtin_comp_slot_t;
@@ -161,6 +167,8 @@ struct ucg_builtin_op {
     ucg_builtin_op_optm_cb_t  optm_cb;  /**< optimization function for the operation */
     ucg_builtin_op_init_cb_t  init_cb;  /**< Initialization function for the operation */
     ucg_builtin_op_final_cb_t final_cb; /**< Finalization function for the operation */
+    ucp_dt_generic_t         *send_dt;  /**< Generic send datatype (if non-contig) */
+    ucp_dt_generic_t         *recv_dt;  /**< Generic receive datatype (if non-contig) */
     ucg_builtin_comp_slot_t  *slots;    /**< slots pointer, for faster initialization */
     ucs_list_link_t          *resend;   /**< resend pointer, for faster resend */
     ucg_builtin_op_step_t     steps[];  /**< steps required to complete the operation */
@@ -181,6 +189,8 @@ struct ucg_builtin_request {
 };
 
 ucs_status_t ucg_builtin_step_create (ucg_builtin_plan_phase_t *phase,
+                                      ucp_datatype_t send_dtype,
+                                      ucp_datatype_t recv_dtype,
                                       unsigned extra_flags,
                                       unsigned base_am_id,
                                       ucg_group_id_t group_id,
