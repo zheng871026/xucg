@@ -960,7 +960,6 @@ ucg_builtin_step_get_gen_dt_length(ucg_builtin_op_step_t *step,
     ucg_builtin_init_state(step, 1, dt_gen, params);
     size_t len = dt_gen->ops.packed_size(step->bcopy.pack_state.dt.generic.state);
     ucg_builtin_finalize_state(step, 1, dt_gen);
-    printf("ucg_builtin_step_get_gen_dt_length(%lu)=%lu\n", datatype, len);
     return len;
 }
 

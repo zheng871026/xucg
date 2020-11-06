@@ -168,9 +168,8 @@ static int ucg_builtin_comp_recv_one_cb(ucg_builtin_request_t *req,
 static int ucg_builtin_comp_recv_noncontig_one_cb(ucg_builtin_request_t *req,
     uint64_t offset, void *data, size_t length)
 {
-    printf("ucg_builtin_comp_recv_noncontig_one_cb(offset=%lu length=%lu)\n", offset, length);
     req->op->recv_dt->ops.unpack(req->step->bcopy.unpack_state.dt.generic.state,
-                                 offset, data, length);
+                                 offset, data, length / req->op->super.params.recv.count);
     (void) ucg_builtin_comp_step_cb(req, NULL);
     return 1;
 }
@@ -194,7 +193,6 @@ static int ucg_builtin_comp_recv_many_cb(ucg_builtin_request_t *req,
 static int ucg_builtin_comp_recv_noncontig_many_cb(ucg_builtin_request_t *req,
     uint64_t offset, void *data, size_t length)
 {
-    printf("ucg_builtin_comp_recv_noncontig_many_cb\n");
     req->op->recv_dt->ops.unpack(req->step->bcopy.unpack_state.dt.generic.state,
                                  offset, data, length);
     return ucg_builtin_comp_step_check_cb(req);
