@@ -102,6 +102,8 @@ enum UCS_S_PACKED ucg_group_hierarchy_level {
     UCG_GROUP_HIERARCHY_LEVEL_L3CACHE
 };
 
+typedef int (*dt_convert_f)(void *dt_ext, ucp_datatype_t *ucp_datatype);
+
 typedef struct ucg_group_params {
     ucg_group_member_index_t member_count; /* number of group members */
     uint32_t cid;                          /* Assign value to group_id */
@@ -149,6 +151,7 @@ typedef struct ucg_group_params {
     /* Callback function for MPI_OP */
     int (*op_is_commute_f)(void *mpi_op);
 
+    dt_convert_f mpi_dt_convert;
 } ucg_group_params_t;
 
 typedef struct ucg_collective {
