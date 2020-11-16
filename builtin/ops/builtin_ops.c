@@ -1304,7 +1304,7 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
         }
 
         if (!UCP_DT_IS_CONTIG(recv_dtype)) {
-            op->recv_dt = ucp_dt_generic(send_dtype);
+            op->recv_dt = ucp_dt_generic(recv_dtype);
         }
     }
 
