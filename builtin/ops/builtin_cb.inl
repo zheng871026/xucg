@@ -627,6 +627,24 @@ static void ucg_builtin_init_pack_and_unpack(ucg_builtin_op_t *op)
     } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
 }
 
+static void ucg_builtin_init_reduce_and_pack(ucg_builtin_op_t *op)
+{
+    ucg_builtin_init_reduce(op);
+    ucg_builtin_init_pack(op);
+}
+
+static void ucg_builtin_init_reduce_and_unpack(ucg_builtin_op_t *op)
+{
+    ucg_builtin_init_reduce(op);
+    ucg_builtin_init_unpack(op);
+}
+
+static void ucg_builtin_init_reduce_and_pack_and_unpack(ucg_builtin_op_t *op)
+{
+    ucg_builtin_init_reduce(op);
+    ucg_builtin_init_pack_and_unpack(op);
+}
+
 static void ucg_builtin_finalize_pack(ucg_builtin_request_t *req)
 {
     ucg_builtin_op_t *op        = req->op;
@@ -665,13 +683,28 @@ static ucs_status_t ucg_builtin_op_select_callback(ucg_builtin_plan_t *plan,
         case UCG_PLAN_METHOD_REDUCE_WAYPOINT:
         case UCG_PLAN_METHOD_REDUCE_TERMINAL:
         case UCG_PLAN_METHOD_REDUCE_RECURSIVE:
-            *init_cb  = ucg_builtin_init_reduce;
-            *final_cb = NULL;
+            if (!UCP_DT_IS_CONTIG(send_dtype)) {
+                if (!UCP_DT_IS_CONTIG(recv_dtype)) {
+                    *init_cb  = ucg_builtin_init_reduce_and_pack_and_unpack;
+                    *final_cb = ucg_builtin_finalize_pack_and_unpack;
+                } else {
+                    *init_cb  = ucg_builtin_init_reduce_and_pack;
+                    *final_cb = ucg_builtin_finalize_pack;
+                }
+            } else if (!UCP_DT_IS_CONTIG(recv_dtype)) {
+                *init_cb  = ucg_builtin_init_reduce_and_unpack;
+                *final_cb = ucg_builtin_finalize_unpack;
+            } else {
+                *init_cb  = ucg_builtin_init_reduce;
+                *final_cb = NULL;
+            }
             break;
+
         case UCG_PLAN_METHOD_ALLGATHER_RECURSIVE:
             *init_cb = ucg_builtin_init_allgather_recursive;
             *final_cb = NULL;
             break;
+
         case UCG_PLAN_METHOD_GATHER_WAYPOINT:
             *init_cb  = ucg_builtin_init_gather;
             *final_cb = NULL;
