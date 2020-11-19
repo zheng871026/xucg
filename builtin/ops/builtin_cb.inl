@@ -183,6 +183,16 @@ static int ucg_builtin_comp_recv_one_then_send_cb(ucg_builtin_request_t *req,
     return 1;
 }
 
+static int ucg_builtin_comp_recv_noncontig_one_then_send_cb(ucg_builtin_request_t *req,
+    uint64_t offset, void *data, size_t length)
+{
+    req->op->recv_dt->ops.unpack(req->step->bcopy.unpack_state.dt.generic.state,
+                                 offset, data, length / req->op->super.params.recv.count);
+    req->recv_comp = 1;
+    (void) ucg_builtin_step_execute(req, NULL);
+    return 1;
+}
+
 static int ucg_builtin_comp_recv_many_cb(ucg_builtin_request_t *req,
     uint64_t offset, void *data, size_t length)
 {
@@ -205,10 +215,29 @@ static int ucg_builtin_comp_recv_many_then_send_pipe_cb(ucg_builtin_request_t *r
     return ucg_builtin_comp_send_check_frag_cb(req, offset);
 }
 
+static int ucg_builtin_comp_recv_noncontig_many_then_send_pipe_cb(ucg_builtin_request_t *req,
+    uint64_t offset, void *data, size_t length)
+{
+    req->op->recv_dt->ops.unpack(req->step->bcopy.unpack_state.dt.generic.state,
+                                 offset, data, length);
+    return ucg_builtin_comp_send_check_frag_cb(req, offset);
+}
+
 static int ucg_builtin_comp_recv_many_then_send_cb(ucg_builtin_request_t *req,
     uint64_t offset, void *data, size_t length)
 {
     memcpy(req->step->recv_buffer + offset, data, length);
+    if (req->pending == 1) {
+        req->recv_comp = 1;
+    }
+    return ucg_builtin_comp_send_check_cb(req);
+}
+
+static int ucg_builtin_comp_recv_noncontig_many_then_send_cb(ucg_builtin_request_t *req,
+    uint64_t offset, void *data, size_t length)
+{
+    req->op->recv_dt->ops.unpack(req->step->bcopy.unpack_state.dt.generic.state,
+                                 offset, data, length);
     if (req->pending == 1) {
         req->recv_comp = 1;
     }
@@ -343,10 +372,18 @@ static ucs_status_t ucg_builtin_step_select_callbacks(ucg_builtin_plan_phase_t *
             is_waypoint_fanout = 1;
             /* no break */
         case UCG_PLAN_METHOD_GATHER_WAYPOINT:
-            if (nonzero_length) {
+            if (!is_contig_recv) { 
+                if (nonzero_length) {
+                    *recv_cb = is_fragmented ? (is_pipelined ? ucg_builtin_comp_recv_noncontig_many_then_send_pipe_cb :
+                                                ucg_builtin_comp_recv_noncontig_many_then_send_cb) :
+                                                ucg_builtin_comp_recv_noncontig_one_then_send_cb;
+                } else {
+                    *recv_cb = ucg_builtin_comp_wait_one_then_send_cb;
+                }
+            } else if (nonzero_length) {
                 *recv_cb = is_fragmented ? (is_pipelined ? ucg_builtin_comp_recv_many_then_send_pipe_cb :
-                                                        ucg_builtin_comp_recv_many_then_send_cb) :
-                                        ucg_builtin_comp_recv_one_then_send_cb;
+                                            ucg_builtin_comp_recv_many_then_send_cb) :
+                                            ucg_builtin_comp_recv_one_then_send_cb;
             } else {
                 *recv_cb = ucg_builtin_comp_wait_one_then_send_cb;
             }
@@ -358,6 +395,7 @@ static ucs_status_t ucg_builtin_step_select_callbacks(ucg_builtin_plan_phase_t *
                                            ucg_builtin_comp_recv_noncontig_many_cb;
                 break;
             }
+
         case UCG_PLAN_METHOD_SEND_TERMINAL:
         case UCG_PLAN_METHOD_SCATTER_TERMINAL:
             *recv_cb = is_single_msg ? ucg_builtin_comp_recv_one_cb :
