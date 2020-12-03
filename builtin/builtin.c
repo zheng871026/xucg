@@ -89,7 +89,7 @@ typedef struct ucg_builtin_am_buffer {
     void *data;
     size_t length;
     unsigned am_flags;
-}ucg_builtin_am_buffer_t;
+} ucg_builtin_am_buffer_t;
 
 typedef struct ucg_builtin_ctx {
     unsigned slots_total;
