@@ -372,7 +372,7 @@ static ucs_status_t ucg_builtin_step_select_callbacks(ucg_builtin_plan_phase_t *
             is_waypoint_fanout = 1;
             /* no break */
         case UCG_PLAN_METHOD_GATHER_WAYPOINT:
-            if (!is_contig_recv) { 
+            if (!is_contig_recv) {
                 if (nonzero_length) {
                     *recv_cb = is_fragmented ? (is_pipelined ? ucg_builtin_comp_recv_noncontig_many_then_send_pipe_cb :
                                                 ucg_builtin_comp_recv_noncontig_many_then_send_cb) :
