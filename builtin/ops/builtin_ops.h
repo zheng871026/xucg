@@ -151,6 +151,7 @@ typedef struct ucg_builtin_op_step {
     struct {
         ucp_dt_state_t         pack_state;
         ucp_dt_state_t         unpack_state;
+        ucp_dt_state_t         pack_state_recv;
     } bcopy;
     struct {
         uct_mem_h              memh;
@@ -208,6 +209,11 @@ ucs_status_t ucg_builtin_op_trigger(ucg_op_t *op,
                                     ucg_coll_id_t coll_id,
                                     ucg_request_t **request);
 ucs_status_t ucg_builtin_msg_process(ucg_builtin_comp_slot_t *slot, ucg_builtin_request_t *req);
+
+void ucg_builtin_swap_net_recv(char *netdata, size_t length, size_t offset,
+                               ucg_builtin_request_t *req);
+
+size_t ucg_builtin_get_dt_len(ucp_dt_generic_t *dt_gen);
 
 /*
  * Incoming messages are processed for one of the collective operations
