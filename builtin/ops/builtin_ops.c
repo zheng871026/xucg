@@ -503,6 +503,9 @@ UCS_PROFILE_FUNC(ucs_status_t, ucg_builtin_step_execute, (req, user_req),
     step->am_header.coll_id         = slot->coll_id;
     ucs_assert(slot->step_idx == step->am_header.step_idx);
 
+    ucs_debug("step_execute, coll_id:%u, step_idx:%u, step->flags:0x%x, send_buffer:%p, recv_buffer:%p",
+              slot->coll_id, slot->step_idx, step->flags, step->send_buffer, step->recv_buffer);
+
     /*
      * For some operations, like MPI_Alltoall, the
      * discrete data should be packed then send (e.g. Bruck algorithms).
@@ -640,16 +643,9 @@ ucs_status_t ucg_builtin_msg_process(ucg_builtin_comp_slot_t *slot, ucg_builtin_
             /* Remove the packet (next call may lead here recursively) */
             ucs_list_del(&desc->super.tag_list[0]);
 
-            char *header_tmp = &desc->data[0];
-            char *recv_buffer_tmp = (char *)slot->req.step->recv_buffer;
-            size_t real_length = desc->super.length;
             if (req->step->phase->is_swap) {
-                char *temp_buffer = (char*)UCS_ALLOC_CHECK(real_length, "temp buffer");
-                memcpy(temp_buffer, header_tmp, real_length);
-                memcpy(header_tmp, recv_buffer_tmp + desc->header.remote_offset, real_length);
-                memcpy(recv_buffer_tmp + desc->header.remote_offset, temp_buffer, real_length);
-                free(temp_buffer);
-                temp_buffer = NULL;
+                ucg_builtin_swap_net_recv(&desc->data[0], desc->super.length,
+                                          desc->header.remote_offset, &slot->req);
             }
 
             /* Handle this "waiting" packet, possibly completing the step */
@@ -734,7 +730,9 @@ ucs_status_t ucg_builtin_op_trigger(ucg_op_t *op, ucg_coll_id_t coll_id, ucg_req
      * local data has to be aggregated along with the incoming data. In others,
      * some shuffle is required once before starting (e.g. Bruck algorithms).
      */
-    builtin_op->init_cb(builtin_op);
+    if (builtin_op->init_cb != NULL) {
+        builtin_op->init_cb(builtin_op);
+    }
 
     /* Consider optimization, if this operation is used often enough */
     if (ucs_unlikely(--builtin_op->opt_cnt == 0)) {
@@ -847,6 +845,9 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_send_flags(ucg_builtin_
         step->fragments = length / step->fragment_length + partial_length;
     }
 
+    ucs_debug("step send_flags:0x%x, length:%lu, fragments:%u, fragment_length:%lu, partial_length:%u, dt_len:%lu",
+              *send_flag, length, step->fragments, step->fragment_length, partial_length, dt_len);
+
     return UCS_OK;
 }
 
@@ -946,23 +947,18 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_recv_flags(ucg_builtin_
         }
     }
 
+    ucs_debug("step recv_flags:0x%x, length:%lu, fragments:%u, fragment_length:%lu, partial_length:%u, dt_len:%lu",
+              *recv_flag, length, step->fragments_recv, fragment_length, partial_length, dt_len);
+
     return UCS_OK;
 }
 
-static inline size_t
-ucg_builtin_step_get_gen_dt_length(ucg_builtin_op_step_t *step,
-                                   ucp_datatype_t datatype,
-                                   const ucg_collective_params_t *params,
-                                   int count)
+size_t ucg_builtin_get_dt_len(ucp_dt_generic_t *dt_gen)
 {
     /* need to generate a one-time state to figure out the packed size */
-    if (count == 0) {
-        return 0;
-    }
-    ucp_dt_generic_t *dt_gen = ucp_dt_generic(datatype);
-    ucg_builtin_init_state(step, 1, dt_gen, params);
-    size_t len = dt_gen->ops.packed_size(step->bcopy.pack_state.dt.generic.state) / count;
-    ucg_builtin_finalize_state(step, 1, dt_gen);
+    void *state_gen = dt_gen->ops.start_pack(dt_gen->context, NULL, 1);
+    size_t len = dt_gen->ops.packed_size(state_gen);
+    dt_gen->ops.finish(state_gen);
     return len;
 }
 
@@ -980,9 +976,9 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
     /* Set the parameters determining the send-flags later on */
     int is_send_contig       = UCP_DT_IS_CONTIG(send_dtype);
     int is_recv_contig       = UCP_DT_IS_CONTIG(recv_dtype);
-    size_t dt_len            = is_send_contig ? params->send.dt_len :
-                               ucg_builtin_step_get_gen_dt_length(step, send_dtype, params, params->send.count);
-    step->buffer_length      = dt_len * params->send.count;
+    size_t send_dt_len       = is_send_contig ? params->send.dt_len :
+                               ucg_builtin_get_dt_len(ucp_dt_generic(send_dtype));
+    step->buffer_length      = send_dt_len * params->send.count;
     step->uct_md             = phase->md;
     if (phase->md) {
         step->uct_iface      = (phase->ep_cnt == 1) ? phase->single_ep->iface :
@@ -1004,6 +1000,7 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
 
     step->bcopy.pack_state.dt.generic.state   = NULL;
     step->bcopy.unpack_state.dt.generic.state = NULL;
+    step->bcopy.pack_state_recv.dt.generic.state = NULL;
 
     /* special parameter of buffer length should be set for allgather with bruck plan */
     if (phase->method == UCG_PLAN_METHOD_ALLGATHER_BRUCK) {
@@ -1091,7 +1088,7 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
     recv_flag = (enum ucg_builtin_op_step_flags) 0;
     send_flag = (enum ucg_builtin_op_step_flags) 0;
     /* Note: in principle, step->send_buffer should not be changed after this function */
-    status = ucg_builtin_step_send_flags(step, phase, params, dt_len, is_send_contig, &send_flag);
+    status = ucg_builtin_step_send_flags(step, phase, params, send_dt_len, is_send_contig, &send_flag);
     extra_flags |= (send_flag & UCG_BUILTIN_OP_STEP_FLAG_FRAGMENTED);
     if (ucs_unlikely(status != UCS_OK)) {
         return status;
@@ -1212,9 +1209,9 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
             ucs_error("Invalid method for a collective operation.");
             return UCS_ERR_INVALID_PARAM;
     }
-    dt_len = is_recv_contig ? params->recv.dt_len :
-             ucg_builtin_step_get_gen_dt_length(step, recv_dtype, params, params->recv.count);
-    status = ucg_builtin_step_recv_flags(step, phase, params, dt_len, is_recv_contig, &recv_flag);
+    size_t recv_dt_len = is_recv_contig ? params->recv.dt_len :
+                         ucg_builtin_get_dt_len(ucp_dt_generic(recv_dtype));
+    status = ucg_builtin_step_recv_flags(step, phase, params, recv_dt_len, is_recv_contig, &recv_flag);
     if (status != UCS_OK) {
         return status;
     }
@@ -1247,7 +1244,7 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
     }
 
     if (phase->segmented) {
-        phase->recv_cache_buffer = (int8_t *)UCS_ALLOC_CHECK(params->send.count * params->send.dt_len, "recv_cache_buffer");
+        phase->recv_cache_buffer = (int8_t *)UCS_ALLOC_CHECK(params->send.count * send_dt_len, "recv_cache_buffer");
         ucs_debug("segmented phase %p fragments %" PRIu32 "", phase, step->fragments_recv);
     } else {
         phase->recv_cache_buffer = NULL;
@@ -1271,6 +1268,36 @@ static inline int ucg_builtin_convert_datatype(ucg_builtin_plan_t *builtin_plan,
     return UCS_OK;
 }
 
+void ucg_builtin_swap_net_recv(char *netdata, size_t length, size_t offset,
+                               ucg_builtin_request_t *req)
+{
+    ucg_builtin_op_step_t *step = req->step;
+    ucp_dt_generic_t *gen_dt = req->op->recv_dt;
+    void *state_pack = step->bcopy.pack_state_recv.dt.generic.state;
+    void *state_unpack = step->bcopy.unpack_state.dt.generic.state;
+    char *recv_buffer = (char *)step->recv_buffer;
+    char *tmp_buffer = NULL;
+
+    ucs_debug("swap netdata:%p length:%lu and recv_buffer:%p offset:%lu",
+              netdata, length, recv_buffer, offset);
+
+    tmp_buffer = (char *)ucs_malloc(length, "temp swap buffer");
+    if (tmp_buffer == NULL) {
+        ucs_fatal("no memory for malloc, length:%lu", length);
+    }
+
+    memcpy(tmp_buffer, netdata, length);
+    if (gen_dt != NULL) {
+        gen_dt->ops.pack(state_pack, offset, netdata, length);
+        gen_dt->ops.unpack(state_unpack, offset, tmp_buffer, length);
+    } else {
+        memcpy(netdata, recv_buffer + offset, length);
+        memcpy(recv_buffer + offset, tmp_buffer, length);
+    }
+
+    free(tmp_buffer);
+}
+
 ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
                                    const ucg_collective_params_t *params,
                                    ucg_op_t **new_op)
@@ -1292,6 +1319,8 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
     int8_t *current_data_buffer          = NULL;
 
     /* obtain UCX datatypes corresponding to the extenral datatypes passed */
+    op->send_dt = NULL;
+    op->recv_dt = NULL;
     if (params->send.count > 0) {
         status = ucg_builtin_convert_datatype(builtin_plan, params->send.dt_ext, &send_dtype);
         if (ucs_unlikely(status != UCS_OK)) {

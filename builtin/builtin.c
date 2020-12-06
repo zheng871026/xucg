@@ -188,17 +188,10 @@ static ucs_status_t ucg_builtin_am_process(ucg_builtin_comp_slot_t *slot, void *
             goto am_handler_store;
         }
 
-        size_t real_length = length - sizeof(ucg_builtin_header_t);
-        char *header_tmp = (char *)header;
-        char *recv_buffer_tmp = (char *)slot->req.step->recv_buffer;
-
         if (slot->req.step->phase->is_swap) {
-            char *temp_buffer = (char*)UCS_ALLOC_CHECK(real_length, "temp buffer");
-            memcpy(temp_buffer, header_tmp + sizeof(ucg_builtin_header_t), real_length);
-            memcpy(header_tmp + sizeof(ucg_builtin_header_t), recv_buffer_tmp + header->remote_offset, real_length);
-            memcpy(recv_buffer_tmp + header->remote_offset, temp_buffer, real_length);
-            free(temp_buffer);
-            temp_buffer = NULL;
+            ucg_builtin_swap_net_recv(data + sizeof(ucg_builtin_header_t),
+                                      length - sizeof(ucg_builtin_header_t),
+                                      header->remote_offset, &slot->req);
         }
 
         /* The packet arrived "on time" - process it */
@@ -1005,6 +998,17 @@ ucs_status_t ucg_builtin_change_unsupport_algo(struct ucg_builtin_algorithm *alg
                                                ucg_builtin_config_t *config)
 {
     ucs_status_t status;
+    ucp_datatype_t ucp_datatype;
+
+    /* Currently, only algorithm 1 supports non-contiguous datatype for allreduce */
+    if (ops_type_choose == ucg_predefined_modifiers[UCG_PRIMITIVE_ALLREDUCE]) {
+        group_params->mpi_dt_convert(coll_params->send.dt_ext, &ucp_datatype);
+        if (!UCP_DT_IS_CONTIG(ucp_datatype) && coll_params->send.count > 0) {
+            ucg_builtin_allreduce_algo_switch(UCG_ALGORITHM_ALLREDUCE_RECURSIVE, &ucg_algo);
+            ucs_info("allreduce non-contiguous datatype, select algo%d:recursive", UCG_ALGORITHM_ALLREDUCE_RECURSIVE);
+            return UCS_OK;
+        }
+    }
 
     /* Special Case 1 : bind-to none */
     if (!(algo->feature_flag & UCG_ALGORITHM_SUPPORT_BIND_TO_NONE) && (group_params->is_bind_to_none)) {
