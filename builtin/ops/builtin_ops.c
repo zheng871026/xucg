@@ -957,6 +957,9 @@ size_t ucg_builtin_get_dt_len(ucp_dt_generic_t *dt_gen)
 {
     /* need to generate a one-time state to figure out the packed size */
     void *state_gen = dt_gen->ops.start_pack(dt_gen->context, NULL, 1);
+    if(dt_gen == NULL) {
+        return 0;
+    }
     size_t len = dt_gen->ops.packed_size(state_gen);
     dt_gen->ops.finish(state_gen);
     return len;
@@ -974,8 +977,8 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
 {
     ucs_status_t status;
     /* Set the parameters determining the send-flags later on */
-    int is_send_contig       = UCP_DT_IS_CONTIG(send_dtype);
-    int is_recv_contig       = UCP_DT_IS_CONTIG(recv_dtype);
+    int is_send_contig       = params->send.dt_len ? UCP_DT_IS_CONTIG(send_dtype) : 1;
+    int is_recv_contig       = params->recv.dt_len ? UCP_DT_IS_CONTIG(recv_dtype) : 1;
     size_t send_dt_len       = is_send_contig ? params->send.dt_len :
                                ucg_builtin_get_dt_len(ucp_dt_generic(send_dtype));
     step->buffer_length      = send_dt_len * params->send.count;
