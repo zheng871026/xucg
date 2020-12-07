@@ -956,10 +956,10 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_recv_flags(ucg_builtin_
 size_t ucg_builtin_get_dt_len(ucp_dt_generic_t *dt_gen)
 {
     /* need to generate a one-time state to figure out the packed size */
-    void *state_gen = dt_gen->ops.start_pack(dt_gen->context, NULL, 1);
     if(dt_gen == NULL) {
         return 0;
     }
+    void *state_gen = dt_gen->ops.start_pack(dt_gen->context, NULL, 1);
     size_t len = dt_gen->ops.packed_size(state_gen);
     dt_gen->ops.finish(state_gen);
     return len;
