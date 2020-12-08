@@ -809,7 +809,7 @@ static ucs_status_t ucg_builtin_op_select_callback(ucg_builtin_plan_t *plan,
                 *init_cb  = ucg_builtin_init_reduce_and_unpack;
                 *final_cb = ucg_builtin_finalize_unpack;
             } else {
-                *init_cb  = NULL;
+                *init_cb  = ucg_builtin_init_reduce;
                 *final_cb = NULL;
             }
             break;
