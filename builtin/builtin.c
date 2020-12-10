@@ -986,6 +986,22 @@ void ucg_builtin_non_commutative_operation(const ucg_group_params_t *group_param
     }
 }
 
+int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
+                               const ucg_collective_params_t *coll_params)
+{
+    ucp_datatype_t ucp_datatype;
+
+    if (coll_params->type.modifiers == ucg_predefined_modifiers[UCG_PRIMITIVE_ALLREDUCE]) {
+        group_params->mpi_dt_convert(coll_params->send.dt_ext, &ucp_datatype);
+        if (!UCP_DT_IS_CONTIG(ucp_datatype) && coll_params->send.count > 0) {
+            ucs_info("allreduce non-contiguous datatype plan");
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 /*
    Deal with all unsupport special case.
 */
@@ -1198,7 +1214,10 @@ static ucs_status_t ucg_builtin_plan(ucg_plan_component_t *plan_component,
     }
 
     ucs_list_add_head(&builtin_ctx->plan_head, &plan->list);
+    plan->super.is_noncontig_allreduce = (plan_topo_type != UCG_PLAN_RECURSIVE) ? 0 :
+                      ucg_is_noncontig_allreduce(builtin_ctx->group_params, coll_params);
     plan->convert_f = builtin_ctx->group_params->mpi_dt_convert;
+    plan->dtspan_f  = builtin_ctx->group_params->mpi_datatype_span;
     plan->resend    = &builtin_ctx->send_head;
     plan->slots     = &builtin_ctx->slots[0];
     plan->am_id     = builtin_ctx->am_id;

@@ -173,6 +173,7 @@ typedef struct ucg_builtin_plan {
     uint16_t                 am_id;   /* active message ID */
     size_t                   non_power_of_two; /* number of processes is power of two or not */
     dt_convert_f             convert_f; /* convert datatypes */
+    dt_span_f                dtspan_f;
     ucg_builtin_plan_phase_t phss[];  /* topology's phases */
 /*  uct_ep_h                 eps[];    * logically located here */
 } ucg_builtin_plan_t;

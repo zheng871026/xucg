@@ -103,6 +103,7 @@ enum UCS_S_PACKED ucg_group_hierarchy_level {
 };
 
 typedef int (*dt_convert_f)(void *dt_ext, ucp_datatype_t *ucp_datatype);
+typedef ptrdiff_t (*dt_span_f)(void *dt_ext, int count, ptrdiff_t *gap);
 
 typedef struct ucg_group_params {
     ucg_group_member_index_t member_count; /* number of group members */
@@ -152,6 +153,8 @@ typedef struct ucg_group_params {
     int (*op_is_commute_f)(void *mpi_op);
 
     dt_convert_f mpi_dt_convert;
+
+    dt_span_f mpi_datatype_span;
 } ucg_group_params_t;
 
 typedef struct ucg_collective {

@@ -170,6 +170,7 @@ struct ucg_builtin_op {
     ucg_builtin_op_final_cb_t final_cb; /**< Finalization function for the operation */
     ucp_dt_generic_t         *send_dt;  /**< Generic send datatype (if non-contig) */
     ucp_dt_generic_t         *recv_dt;  /**< Generic receive datatype (if non-contig) */
+    dt_span_f                 dtspan_f;
     ucg_builtin_comp_slot_t  *slots;    /**< slots pointer, for faster initialization */
     ucs_list_link_t          *resend;   /**< resend pointer, for faster resend */
     ucg_builtin_op_step_t     steps[];  /**< steps required to complete the operation */
@@ -209,6 +210,9 @@ ucs_status_t ucg_builtin_op_trigger(ucg_op_t *op,
                                     ucg_coll_id_t coll_id,
                                     ucg_request_t **request);
 ucs_status_t ucg_builtin_msg_process(ucg_builtin_comp_slot_t *slot, ucg_builtin_request_t *req);
+
+int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
+                               const ucg_collective_params_t *coll_params);
 
 void ucg_builtin_swap_net_recv(char *netdata, size_t length, size_t offset,
                                ucg_builtin_request_t *req);
