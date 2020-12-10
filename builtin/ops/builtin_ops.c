@@ -1283,7 +1283,8 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
                                    ucg_op_t **new_op)
 {
     ucs_status_t status;
-    ucp_datatype_t send_dtype, recv_dtype;
+    ucp_datatype_t send_dtype = 0;
+    ucp_datatype_t recv_dtype = 0;
     ucg_builtin_plan_t *builtin_plan     = (ucg_builtin_plan_t*)plan;
     ucg_builtin_plan_phase_t *next_phase = &builtin_plan->phss[0];
     unsigned phase_count                 = builtin_plan->phs_cnt;
