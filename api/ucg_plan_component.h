@@ -113,6 +113,7 @@ typedef struct ucg_base_plan {
     /*  Attribute */
     int                      support_non_commutative;
     int                      support_large_datatype;
+    int                      is_noncontig_allreduce;
 } ucg_plan_t;
 
 enum ucg_request_common_flags {

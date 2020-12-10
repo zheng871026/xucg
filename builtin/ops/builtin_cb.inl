@@ -31,13 +31,22 @@ void ucg_builtin_mpi_reduce_full(ucg_builtin_request_t *req, size_t offset, void
     ucp_dt_generic_t *gen_dt = req->op->recv_dt;
     size_t dt_len = params->recv.dt_len;
     void *gen_state = NULL;
+    char *reduce_buf = NULL;
+    ptrdiff_t dsize = 0;
+    ptrdiff_t gap = 0;
 
     if (gen_dt != NULL) {
-        gen_state = gen_dt->ops.start_unpack(gen_dt->context, params->send.buf, params->recv.count);
+        dt_len = ucg_builtin_get_dt_len(gen_dt);
+        dsize = req->op->dtspan_f(params->recv.dt_ext, params->recv.count, &gap);
+        reduce_buf = (char *)ucs_malloc(dsize, "temp full reduce buffer");
+        if (reduce_buf == NULL) {
+            ucs_fatal("no memory for malloc, dsize:%lu", dsize);
+        }
+        gen_state = gen_dt->ops.start_unpack(gen_dt->context, reduce_buf - gap, params->recv.count);
         gen_dt->ops.unpack(gen_state, 0, data, length);
         gen_dt->ops.finish(gen_state);
-        data = params->send.buf;
-        dt_len = ucg_builtin_get_dt_len(gen_dt);
+        data = reduce_buf - gap;
+        offset = (offset / dt_len) * params->recv.dt_len;
     }
 
     ucs_assert(length == (params->recv.count * dt_len));
@@ -45,6 +54,10 @@ void ucg_builtin_mpi_reduce_full(ucg_builtin_request_t *req, size_t offset, void
               data, length, req->step->recv_buffer, offset, dt_len);
     ucg_builtin_mpi_reduce(params->recv.op_ext, data, req->step->recv_buffer + offset,
                            params->recv.count, params->recv.dt_ext);
+
+    if (reduce_buf != NULL) {
+        ucs_free(reduce_buf);
+    }
 }
 
 void ucg_builtin_mpi_reduce_partial(ucg_builtin_request_t *req, size_t offset, void *data,
@@ -53,19 +66,34 @@ void ucg_builtin_mpi_reduce_partial(ucg_builtin_request_t *req, size_t offset, v
     ucp_dt_generic_t *gen_dt = req->op->recv_dt;
     size_t dt_len = params->recv.dt_len;
     void *gen_state = NULL;
+    char *reduce_buf = NULL;
+    ptrdiff_t dsize = 0;
+    ptrdiff_t gap = 0;
+    size_t count;
 
     if (gen_dt != NULL) {
-        gen_state = gen_dt->ops.start_unpack(gen_dt->context, params->send.buf, params->recv.count);
+        dt_len = ucg_builtin_get_dt_len(gen_dt);
+        count = length / dt_len;
+        dsize = req->op->dtspan_f(params->recv.dt_ext, count, &gap);
+        reduce_buf = (char *)ucs_malloc(dsize, "temp partial reduce buffer");
+        if (reduce_buf == NULL) {
+            ucs_fatal("no memory for malloc, dsize:%lu", dsize);
+        }
+        gen_state = gen_dt->ops.start_unpack(gen_dt->context, reduce_buf - gap, count);
         gen_dt->ops.unpack(gen_state, 0, data, length);
         gen_dt->ops.finish(gen_state);
-        data = params->send.buf;
-        dt_len = ucg_builtin_get_dt_len(gen_dt);
+        data = reduce_buf - gap;
+        offset = (offset / dt_len) * params->recv.dt_len;
     }
 
     ucs_debug("mpi_reduce_partial, data:%p, length:%lu, recv_buffer:%p, offset:%lu, dt_len:%lu",
               data, length, req->step->recv_buffer, offset, dt_len);
     ucg_builtin_mpi_reduce(params->recv.op_ext, data, req->step->recv_buffer + offset,
                            length / dt_len, params->recv.dt_ext);
+
+    if (reduce_buf != NULL) {
+        ucs_free(reduce_buf);
+    }
 }
 
 static UCS_F_ALWAYS_INLINE void ucg_builtin_comp_last_step_cb(ucg_builtin_request_t *req, ucs_status_t status)
@@ -300,14 +328,29 @@ UCS_PROFILE_FUNC(int, ucg_builtin_comp_reduce_full_cb, (req, offset, data, lengt
     memcpy(req->step->phase->recv_cache_buffer + offset, data, length);
 
     if (req->pending == 1) {
+        char *tmp_buffer = NULL;
+        char *netdata = (char *)req->step->phase->recv_cache_buffer;
         ucp_dt_generic_t *gen_dt = req->op->recv_dt;
+        void *state_pack = req->step->bcopy.pack_state_recv.dt.generic.state;
+        void *state_unpack = req->step->bcopy.unpack_state.dt.generic.state;
         ucg_collective_params_t *params = &req->op->super.params;
         size_t dt_len = (gen_dt == NULL) ? params->recv.dt_len :
                         ucg_builtin_get_dt_len(gen_dt);
+        size_t total_length = params->recv.count * dt_len;
 
-        ucs_debug("comp_reduce_full_cb, recv_cache_buffer:%p", req->step->phase->recv_cache_buffer);
-        ucg_builtin_mpi_reduce_full(req, 0, req->step->phase->recv_cache_buffer,
-                                    params->recv.count * dt_len, params);
+        if (gen_dt != NULL && req->step->phase->is_swap) {
+            tmp_buffer = (char *)ucs_malloc(total_length, "temp swap buffer");
+            if (tmp_buffer == NULL) {
+                ucs_fatal("no memory for malloc, total_length:%lu", total_length);
+            }
+
+            memcpy(tmp_buffer, netdata, total_length);
+            gen_dt->ops.pack(state_pack, 0, netdata, total_length);
+            gen_dt->ops.unpack(state_unpack, 0, tmp_buffer, total_length);
+            ucs_free(tmp_buffer);
+        }
+
+        ucg_builtin_mpi_reduce_full(req, 0, netdata, total_length, params);
     }
 
     return ucg_builtin_comp_step_check_cb(req);

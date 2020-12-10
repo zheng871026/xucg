@@ -5,6 +5,7 @@
 
 #include "ucg_group.h"
 #include "../builtin/plan/builtin_plan.h"
+#include <ucg/api/ucg_mpi.h>
 
 #include <ucp/core/ucp_ep.inl>
 #include <ucp/core/ucp_worker.h>
@@ -303,6 +304,27 @@ ucs_status_t ucg_plan_select(ucg_group_h group, const char* planner_name,
                                      planner_name, &group->params, params, planc_p);
 }
 
+extern int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
+                                      const ucg_collective_params_t *coll_params);
+
+static int ucg_chk_noncontig_allreduce_plan(const ucg_collective_params_t *coll_params,
+                                            const ucg_group_params_t *group_params,
+                                            const ucg_plan_t *plan)
+{
+    int noncontig_allreduce;
+
+    if (coll_params->type.modifiers != ucg_predefined_modifiers[UCG_PRIMITIVE_ALLREDUCE]) {
+        return 0;
+    }
+
+    noncontig_allreduce = ucg_is_noncontig_allreduce(group_params, coll_params);
+    if (plan->is_noncontig_allreduce) {
+        return !noncontig_allreduce;
+    } else {
+        return noncontig_allreduce;
+    }
+}
+
 void ucg_get_cache_plan(unsigned int message_size_level, unsigned int coll_root,
                         ucg_group_h group, ucg_collective_params_t *params, ucg_plan_t **cache_plan, unsigned root)
 {
@@ -324,6 +346,11 @@ void ucg_get_cache_plan(unsigned int message_size_level, unsigned int coll_root,
 
     ucg_builtin_config_t *config = (ucg_builtin_config_t *)plan->planner->plan_config;
     if (params->send.dt_len > config->large_datatype_threshold && !plan->support_large_datatype) {
+        *cache_plan = NULL;
+        return;
+    }
+
+    if (ucg_chk_noncontig_allreduce_plan(params, &group->params, plan)) {
         *cache_plan = NULL;
         return;
     }
@@ -417,7 +444,8 @@ UCS_PROFILE_FUNC(ucs_status_t, ucg_collective_create,
 
     if (ucs_likely(plan != NULL)) {
         ucs_list_for_each(op, &plan->op_head, list) {
-            if (!memcmp(&op->params, params, sizeof(*params))) {
+            if (!memcmp(&op->params, params, sizeof(*params)) &&
+                !plan->is_noncontig_allreduce) {
                 status = UCS_OK;
                 goto op_found;
             }

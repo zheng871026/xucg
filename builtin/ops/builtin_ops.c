@@ -1264,8 +1264,12 @@ void ucg_builtin_swap_net_recv(char *netdata, size_t length, size_t offset,
 
     memcpy(tmp_buffer, netdata, length);
     if (gen_dt != NULL) {
-        gen_dt->ops.pack(state_pack, offset, netdata, length);
-        gen_dt->ops.unpack(state_unpack, offset, tmp_buffer, length);
+        if (step->recv_cb == ucg_builtin_comp_reduce_full_cb) {
+            ucs_debug("large non-contiguous datatype can not swap here");
+        } else {
+            gen_dt->ops.pack(state_pack, offset, netdata, length);
+            gen_dt->ops.unpack(state_unpack, offset, tmp_buffer, length);
+        }
     } else {
         memcpy(netdata, recv_buffer + offset, length);
         memcpy(recv_buffer + offset, tmp_buffer, length);
@@ -1295,6 +1299,7 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
     int8_t *current_data_buffer          = NULL;
 
     /* obtain UCX datatypes corresponding to the extenral datatypes passed */
+    op->dtspan_f = builtin_plan->dtspan_f;
     op->send_dt = NULL;
     op->recv_dt = NULL;
     if (params->send.count > 0) {
