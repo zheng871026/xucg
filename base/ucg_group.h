@@ -86,4 +86,7 @@ struct ucg_group {
     /* Below this point - the private per-planner data is allocated/stored */
 };
 
+int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
+                               const ucg_collective_params_t *coll_params);
+
 #endif /* UCG_GROUP_H_ */

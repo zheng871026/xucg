@@ -304,9 +304,6 @@ ucs_status_t ucg_plan_select(ucg_group_h group, const char* planner_name,
                                      planner_name, &group->params, params, planc_p);
 }
 
-extern int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
-                                      const ucg_collective_params_t *coll_params);
-
 static int ucg_chk_noncontig_allreduce_plan(const ucg_collective_params_t *coll_params,
                                             const ucg_group_params_t *group_params,
                                             const ucg_plan_t *plan)

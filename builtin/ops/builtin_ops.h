@@ -211,9 +211,6 @@ ucs_status_t ucg_builtin_op_trigger(ucg_op_t *op,
                                     ucg_request_t **request);
 ucs_status_t ucg_builtin_msg_process(ucg_builtin_comp_slot_t *slot, ucg_builtin_request_t *req);
 
-int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
-                               const ucg_collective_params_t *coll_params);
-
 void ucg_builtin_swap_net_recv(char *netdata, size_t length, size_t offset,
                                ucg_builtin_request_t *req);
 

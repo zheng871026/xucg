@@ -35,8 +35,16 @@ void ucg_builtin_mpi_reduce_full(ucg_builtin_request_t *req, size_t offset, void
     ptrdiff_t dsize = 0;
     ptrdiff_t gap = 0;
 
+    if (dt_len == 0 || length == 0) {
+        return;
+    }
+
     if (gen_dt != NULL) {
         dt_len = ucg_builtin_get_dt_len(gen_dt);
+        if (dt_len == 0) {
+            ucs_info("mpi_reduce_full, dt_len is 0");
+            return;
+        }
         dsize = req->op->dtspan_f(params->recv.dt_ext, params->recv.count, &gap);
         reduce_buf = (char *)ucs_malloc(dsize, "temp full reduce buffer");
         if (reduce_buf == NULL) {
@@ -71,8 +79,16 @@ void ucg_builtin_mpi_reduce_partial(ucg_builtin_request_t *req, size_t offset, v
     ptrdiff_t gap = 0;
     size_t count;
 
+    if (dt_len == 0 || length == 0) {
+        return;
+    }
+
     if (gen_dt != NULL) {
         dt_len = ucg_builtin_get_dt_len(gen_dt);
+        if (dt_len == 0) {
+            ucs_info("mpi_reduce_partial, dt_len is 0");
+            return;
+        }
         count = length / dt_len;
         dsize = req->op->dtspan_f(params->recv.dt_ext, count, &gap);
         reduce_buf = (char *)ucs_malloc(dsize, "temp partial reduce buffer");
