@@ -1257,6 +1257,10 @@ void ucg_builtin_swap_net_recv(char *netdata, size_t length, size_t offset,
     ucs_debug("swap netdata:%p length:%lu and recv_buffer:%p offset:%lu",
               netdata, length, recv_buffer, offset);
 
+    if (length == 0) {
+        return;
+    }
+
     tmp_buffer = (char *)ucs_malloc(length, "temp swap buffer");
     if (tmp_buffer == NULL) {
         ucs_fatal("no memory for malloc, length:%lu", length);
@@ -1303,7 +1307,7 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
     op->dtspan_f = builtin_plan->dtspan_f;
     op->send_dt = NULL;
     op->recv_dt = NULL;
-    if (params->send.count > 0) {
+    if (params->send.count > 0 && params->send.dt_len > 0) {
         status = ucg_builtin_convert_datatype(builtin_plan, params->send.dt_ext, &send_dtype);
         if (ucs_unlikely(status != UCS_OK)) {
             return status;
@@ -1312,7 +1316,7 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
                       op->send_dt;
     }
 
-    if (params->recv.count > 0) {
+    if (params->recv.count > 0 && params->recv.dt_len > 0) {
         status = ucg_builtin_convert_datatype(builtin_plan, params->recv.dt_ext, &recv_dtype);
         if (ucs_unlikely(status != UCS_OK)) {
             return status;
