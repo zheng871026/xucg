@@ -220,7 +220,7 @@ ucs_status_t ucg_group_create(ucg_worker_h worker,
     if (status != UCS_OK) {
         goto cleanup_planners;
     }
-
+    new_group->params.is_socket_balance = params->is_socket_balance;
     ucs_list_add_head(&ctx->groups_head, &new_group->list);
     UCP_WORKER_THREAD_CS_EXIT_CONDITIONAL(worker);
     *group_p = new_group;
