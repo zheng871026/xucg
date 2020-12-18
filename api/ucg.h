@@ -155,6 +155,7 @@ typedef struct ucg_group_params {
     dt_convert_f mpi_dt_convert;
 
     dt_span_f mpi_datatype_span;
+    char is_socket_balance;
 } ucg_group_params_t;
 
 typedef struct ucg_collective {
