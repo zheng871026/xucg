@@ -1003,6 +1003,26 @@ int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
     return 0;
 }
 
+#define UCT_MIN_SHORT_ONE_LEN 80
+#define UCT_MIN_BCOPY_ONE_LEN 1000
+int ucg_is_segmented_allreduce(const ucg_collective_params_t *coll_params)
+{
+    int count = coll_params->send.count;
+    size_t dt_len = coll_params->send.dt_len;
+
+    if (coll_params->type.modifiers == ucg_predefined_modifiers[UCG_PRIMITIVE_ALLREDUCE]) {
+        if (dt_len > UCT_MIN_BCOPY_ONE_LEN) {
+            return 1;
+        }
+
+        if (dt_len > UCT_MIN_SHORT_ONE_LEN && (dt_len * count) < UCG_GROUP_MED_MSG_SIZE) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 /*
    Deal with all unsupport special case.
 */
@@ -1068,6 +1088,13 @@ ucs_status_t ucg_builtin_change_unsupport_algo(struct ucg_builtin_algorithm *alg
                 ucg_builtin_plan_decision_in_noncommutative_largedata_case(msg_size, NULL);
                 ucs_warn("Current algorithm does not support large datatype, and switch to Recursive doubling or Ring Algorithm which may have unexpected performance");
         }
+    }
+
+    /* The allreduce result is wrong when phase->segmented=1 and using ring algorithm, must avoid it */
+    if (ucg_algo.ring && ucg_is_segmented_allreduce(coll_params)) {
+        ucg_builtin_allreduce_algo_switch(UCG_ALGORITHM_ALLREDUCE_RECURSIVE, &ucg_algo);
+        ucs_info("ring algorithm does not support segmented phase, select recursive algorithm");
+        return UCS_OK;
     }
 
     return status;
@@ -1213,6 +1240,7 @@ static ucs_status_t ucg_builtin_plan(ucg_plan_component_t *plan_component,
     ucs_list_add_head(&builtin_ctx->plan_head, &plan->list);
     plan->super.is_noncontig_allreduce = (plan_topo_type != UCG_PLAN_RECURSIVE) ? 0 :
                       ucg_is_noncontig_allreduce(builtin_ctx->group_params, coll_params);
+    plan->super.is_ring_plan_topo_type = (plan_topo_type == UCG_PLAN_RING);
     plan->convert_f = builtin_ctx->group_params->mpi_dt_convert;
     plan->dtspan_f  = builtin_ctx->group_params->mpi_datatype_span;
     plan->resend    = &builtin_ctx->send_head;
