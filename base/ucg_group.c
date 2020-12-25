@@ -153,22 +153,41 @@ ucs_status_t ucg_init_group(ucg_worker_h worker,
     return UCS_OK;
 }
 
-void ucg_group_clean_planners(ucg_groups_t *ctx,
-                              unsigned planner_idx,
-                              struct ucg_group *new_group)
+static void ucg_group_clean_topo_map(ucg_group_params_t *params)
 {
-    while (planner_idx) {
-        ucg_plan_component_t *planner = ctx->planners[planner_idx--].plan_component;
-        planner->destroy((void*)new_group);
+    unsigned i = 0;
+    for (i = 0; i < params->member_count; i++) {
+        if (params->topo_map[i] != NULL) {
+            ucs_free(params->topo_map[i]);
+            params->topo_map[i] = NULL;
+        }
+    }
+    ucs_free(params->topo_map);
+    params->topo_map = NULL;
+}
+
+static void ucg_group_clean_planners(ucg_groups_t *ctx,
+                                     int planner_idx,
+                                     struct ucg_group *new_group)
+{
+    if (planner_idx == 0) {
+        if (new_group->params.topo_map) {
+            ucg_group_clean_topo_map(&new_group->params);
+        }
+    } else {
+        while (planner_idx >= 0) {
+            ucg_plan_component_t *planner = ctx->planners[planner_idx--].plan_component;
+            planner->destroy((void*)new_group);
+        }
     }
     ucs_free(new_group);
     new_group = NULL;
 }
 
-ucs_status_t ucg_group_planner_create(ucg_groups_t *ctx,
-                                      ucg_worker_h worker,
-                                      struct ucg_group *new_group,
-                                      unsigned *idx)
+static ucs_status_t ucg_group_planner_create(ucg_groups_t *ctx,
+                                             ucg_worker_h worker,
+                                             struct ucg_group *new_group,
+                                             int *idx)
 {
     ucs_status_t status = UCS_OK;
     for (*idx = 0; *idx < ctx->num_planners; (*idx)++) {
@@ -204,7 +223,7 @@ ucs_status_t ucg_group_create(ucg_worker_h worker,
         goto cleanup_none;
     }
 
-    unsigned idx = 0;
+    int idx = 0;
     status = ucg_init_group(worker, params, ctx, distance_size, nodenumber_size, new_group);
     if (status != UCS_OK) {
         goto cleanup_planners;
