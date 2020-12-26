@@ -155,7 +155,7 @@ ucs_status_t ucg_init_group(ucg_worker_h worker,
 
 static void ucg_group_clean_topo_map(ucg_group_params_t *params)
 {
-    unsigned i = 0;
+    unsigned i;
     for (i = 0; i < params->member_count; i++) {
         if (params->topo_map[i] != NULL) {
             ucs_free(params->topo_map[i]);

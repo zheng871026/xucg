@@ -73,7 +73,11 @@ static ucs_status_t ucg_builtin_prepare_topology_info(const ucg_group_params_t *
     topo_params->rank_same_node = (ucg_group_member_index_t*)UCS_ALLOC_CHECK(alloc_size, "rank same node");
 
     alloc_size = sizeof(ucg_group_member_index_t) * topo_params->node_cnt;
-    topo_params->subroot_array  = (ucg_group_member_index_t*)UCS_ALLOC_CHECK(alloc_size, "subroot array");
+    topo_params->subroot_array = (ucg_group_member_index_t*)malloc(alloc_size);
+    if (topo_params->subroot_array == NULL) {
+        ucs_free(topo_params->rank_same_node);
+        return UCS_ERR_NO_MEMORY;
+    }
 
     /* Initialization */
     for (node_idx = 0; node_idx < topo_params->node_cnt; node_idx++) {
