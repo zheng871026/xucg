@@ -48,8 +48,15 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_short_one(ucg_builti
 {
     ucg_builtin_step_assert(step, UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_SHORT);
     ucs_debug("am_short_one step %u length %zu", step->am_header.step_idx, step->buffer_length);
+
+    int8_t *send_buffer          = step->send_buffer;
+    void *dt_state               = step->non_contig.pack_state.dt.generic.state;
+    if (dt_state != NULL) {
+        req->op->send_dt->ops.pack(dt_state, 0, step->non_contig.contig_buffer, step->buffer_length);
+        send_buffer              = step->non_contig.contig_buffer;
+    }
     return step->uct_iface->ops.ep_am_short(ep, step->am_id,
-                                            step->am_header.header, step->send_buffer, step->buffer_length);
+                                            step->am_header.header, send_buffer, step->buffer_length);
 }
 
 static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_short_max(ucg_builtin_request_t *req,
@@ -59,8 +66,16 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_short_max(ucg_builti
     ucs_status_t status;
     unsigned am_id               = step->am_id;
     ucg_offset_t frag_size       = step->fragment_length;
-    int8_t *buffer_iter          = step->send_buffer + step->iter_offset;
-    int8_t *buffer_iter_limit    = step->send_buffer + step->buffer_length - frag_size;
+    int8_t *send_buffer          = step->send_buffer;
+    void *dt_state               = step->non_contig.pack_state.dt.generic.state;
+
+    if (dt_state != NULL) {
+        req->op->send_dt->ops.pack(dt_state, 0, step->non_contig.contig_buffer, step->buffer_length);
+        send_buffer              = step->non_contig.contig_buffer;
+    }
+
+    int8_t *buffer_iter          = send_buffer + step->iter_offset;
+    int8_t *buffer_iter_limit    = send_buffer + step->buffer_length - frag_size;
     ucg_builtin_header_t am_iter = { .header = step->am_header.header };
     am_iter.remote_offset        = (is_single_send) ? step->iter_offset :
                                    am_iter.remote_offset + step->iter_offset;
@@ -86,17 +101,17 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_short_max(ucg_builti
         /* send last fragment of the message */
         if (ucs_unlikely(status != UCS_OK)) {
             /* assuming UCS_ERR_NO_RESOURCE, restore the state for re-entry */
-            step->iter_offset = (!is_single_send) ? buffer_iter - frag_size - step->send_buffer :
+            step->iter_offset = (!is_single_send) ? buffer_iter - frag_size - send_buffer :
                                 step->iter_offset;
             return status;
         }
     }
 
     ucs_debug("am_short_max step: %u; offset: %" PRIu32 "", step->am_header.step_idx, am_iter.remote_offset);
-    status = ep_am_short(ep, am_id, am_iter.header, buffer_iter, step->send_buffer + step->buffer_length - buffer_iter);
+    status = ep_am_short(ep, am_id, am_iter.header, buffer_iter, send_buffer + step->buffer_length - buffer_iter);
     /* iter_offset can not set to be zero for pipelining */
     if (!is_single_send) {
-        step->iter_offset = (status == UCS_OK) ? 0 : buffer_iter - step->send_buffer;
+        step->iter_offset = (status == UCS_OK) ? 0 : buffer_iter - send_buffer;
     }
 
     return status;
@@ -107,7 +122,7 @@ static size_t ucg_builtin_step_am_bcopy_single_frag_packer(void *dest, void *arg
     ucg_builtin_request_t *req       = (ucg_builtin_request_t*)arg;
     ucg_builtin_op_step_t *step      = req->step;
     ucg_builtin_header_t *header_ptr = (ucg_builtin_header_t*)dest;
-    void *dt_state                   = step->bcopy.pack_state.dt.generic.state;
+    void *dt_state                   = step->non_contig.pack_state.dt.generic.state;
     header_ptr->header               = step->am_header.header;
 
     if (dt_state != NULL) {
@@ -123,7 +138,7 @@ static size_t ucg_builtin_step_am_bcopy_full_frag_packer(void *dest, void *arg)
     ucg_builtin_request_t *req       = (ucg_builtin_request_t*)arg;
     ucg_builtin_op_step_t *step      = req->step;
     ucg_builtin_header_t *header_ptr = (ucg_builtin_header_t*)dest;
-    void *dt_state                   = step->bcopy.pack_state.dt.generic.state;
+    void *dt_state                   = step->non_contig.pack_state.dt.generic.state;
     header_ptr->header               = step->am_header.header;
 
     if (dt_state != NULL) {
@@ -140,7 +155,7 @@ static size_t ucg_builtin_step_am_bcopy_partial_frag_packer(void *dest, void *ar
     ucg_builtin_op_step_t *step      = req->step;
     ucg_offset_t last_frag_length    = step->buffer_length - step->iter_offset;
     ucg_builtin_header_t *header_ptr = (ucg_builtin_header_t*)dest;
-    void *dt_state                   = step->bcopy.pack_state.dt.generic.state;
+    void *dt_state                   = step->non_contig.pack_state.dt.generic.state;
     header_ptr->header               = step->am_header.header;
 
     if (dt_state != NULL) {
@@ -220,8 +235,16 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_zcopy_one(ucg_builti
                                                                       ucg_builtin_op_step_t *step,
                                                                       uct_ep_h ep, int is_single_send)
 {
+    int8_t *send_buffer          = step->send_buffer;
+    void *dt_state               = step->non_contig.pack_state.dt.generic.state;
+
+    if (dt_state != NULL) {
+        req->op->send_dt->ops.pack(dt_state, 0, step->non_contig.contig_buffer, step->buffer_length);
+        send_buffer              = step->non_contig.contig_buffer;
+    }
+
     uct_iov_t iov = {
-        .buffer = step->send_buffer,
+        .buffer = send_buffer,
         .length = step->buffer_length,
         .memh   = step->zcopy.memh,
         .stride = 0,
@@ -247,17 +270,24 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_zcopy_max(ucg_builti
     unsigned am_id                = step->am_id;
     step->am_header.remote_offset = (is_single_send) ? step->iter_offset :
                                     step->am_header.remote_offset;
-    ucg_offset_t frag_size        = step->fragment_length;
-    void* iov_buffer_limit        = step->send_buffer + step->buffer_length - frag_size;
-    unsigned zcomp_index          = step->iter_ep * step->fragments +
-                                    step->iter_offset / step->fragment_length;
-    ucg_builtin_zcomp_t *zcomp    = &step->zcopy.zcomp[zcomp_index];
+    int8_t *send_buffer           = step->send_buffer;
+    void *dt_state                = step->non_contig.pack_state.dt.generic.state;
+    if (dt_state != NULL) {
+        req->op->send_dt->ops.pack(dt_state, 0, step->non_contig.contig_buffer, step->buffer_length);
+        send_buffer               = step->non_contig.contig_buffer;
+    }
+
+    ucg_offset_t frag_size      = step->fragment_length;
+    void* iov_buffer_limit      = send_buffer + step->buffer_length - frag_size;
+    unsigned zcomp_index        = step->iter_ep * step->fragments +
+                                  step->iter_offset / step->fragment_length;
+    ucg_builtin_zcomp_t *zcomp  = &step->zcopy.zcomp[zcomp_index];
     ucs_status_t (*ep_am_zcopy)(uct_ep_h, uint8_t, const void*, unsigned,
             const uct_iov_t*, size_t, unsigned, uct_completion_t*) =
                     step->uct_iface->ops.ep_am_zcopy;
 
     uct_iov_t iov = {
-        .buffer = step->send_buffer + step->iter_offset,
+        .buffer = send_buffer + step->iter_offset,
         .length = frag_size,
         .memh   = step->zcopy.memh,
         .stride = 0,
@@ -285,7 +315,7 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_zcopy_max(ucg_builti
         } while ((status == UCS_INPROGRESS) && (iov.buffer < iov_buffer_limit));
 
         if (ucs_unlikely(status != UCS_INPROGRESS)) {
-            step->iter_offset = (int8_t*)iov.buffer - step->send_buffer - frag_size;
+            step->iter_offset = (int8_t*)iov.buffer - send_buffer - frag_size;
             step->am_header.remote_offset -= frag_size;
             zcomp--;
             step->resend_flag = UCG_BUILTIN_OP_STEP_RESEND;
@@ -295,13 +325,13 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_zcopy_max(ucg_builti
 
     /* Send last fragment of the message */
     zcomp->req = req;
-    iov.length = step->send_buffer + step->buffer_length - (int8_t*)iov.buffer;
+    iov.length = send_buffer + step->buffer_length - (int8_t*)iov.buffer;
     ucs_debug("am_zcopy_max step %u offset %" PRIu32 " length %zu", step->am_header.step_idx, step->am_header.remote_offset, iov.length);
     status     = ep_am_zcopy(ep, am_id, &step->am_header,
                              sizeof(step->am_header),
                              &iov, 1, 0, &zcomp->comp);
     if (ucs_unlikely(status != UCS_INPROGRESS)) {
-        step->iter_offset = (!is_single_send) ? (int8_t*)iov.buffer - step->send_buffer :
+        step->iter_offset = (!is_single_send) ? (int8_t*)iov.buffer - send_buffer :
                             step->iter_offset;
         step->resend_flag = UCG_BUILTIN_OP_STEP_RESEND;
         return status;
@@ -662,6 +692,41 @@ ucs_status_t ucg_builtin_msg_process(ucg_builtin_comp_slot_t *slot, ucg_builtin_
     return UCS_INPROGRESS;
 }
 
+ucs_status_t ucg_builtin_step_set_contig(ucg_builtin_op_step_t *step,
+                                         int is_contig)
+{
+    ucs_status_t status = UCS_OK;
+    if (is_contig) {
+        return status;
+    }
+
+    /* only non-contig dt will malloc contig_buffer and malloc only once. */
+    if (!is_contig && step->non_contig.contig_buffer == NULL) {
+        step->non_contig.contig_buffer = (int8_t *)UCS_ALLOC_CHECK(step->buffer_length, "contig_buffer");
+    }
+
+    if (step->flags & UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_ZCOPY) {
+        /* The send buffer changed, reregister it */
+        uct_md_mem_dereg(step->uct_md, step->zcopy.memh);
+        status = uct_md_mem_reg(step->uct_md, step->non_contig.contig_buffer, 
+                                step->buffer_length, UCT_MD_MEM_ACCESS_ALL, &step->zcopy.memh);
+        if (status != UCS_OK) {
+            ucs_error("contig_buffer md mem register failed.");
+            return status;
+        }
+    }
+
+    return status;
+}
+
+void ucg_builtin_step_release_contig(ucg_builtin_op_step_t *step)
+{
+    if (step->non_contig.contig_buffer != NULL) {
+        ucs_free(step->non_contig.contig_buffer);
+        step->non_contig.contig_buffer = NULL;
+    }
+}
+
 void ucg_builtin_op_discard(ucg_op_t *op)
 {
     ucg_builtin_op_t *builtin_op = (ucg_builtin_op_t*)op;
@@ -681,6 +746,8 @@ void ucg_builtin_op_discard(ucg_op_t *op)
                 step->fragment_pending = NULL;
             }
         }
+
+        ucg_builtin_step_release_contig(step);
     } while (!((step++)->flags & UCG_BUILTIN_OP_STEP_FLAG_LAST_STEP));
 
     ucs_mpool_put_inline(op);
@@ -744,7 +811,7 @@ ucs_status_t ucg_builtin_op_trigger(ucg_op_t *op, ucg_coll_id_t coll_id, ucg_req
 static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_send_flags(ucg_builtin_op_step_t *step,
                                                                     ucg_builtin_plan_phase_t *phase,
                                                                     const ucg_collective_params_t *params,
-                                                                    size_t dt_len, int is_send_contig,
+                                                                    size_t dt_len,
                                                                     enum ucg_builtin_op_step_flags *send_flag)
 {
     size_t length = step->buffer_length;
@@ -757,17 +824,18 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_send_flags(ucg_builtin_
      * Short messages (e.g. RDMA "inline")
      */
     if (ucs_likely((length <= phase->send_thresh.max_short_one) &&
-                   (phase->send_thresh.max_short_one != 0) &&
-                   (is_send_contig))) {
+                   (phase->send_thresh.max_short_one != 0))) {
         /* Short send - single message */
         *send_flag = UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_SHORT;
         step->fragments = 1;
     } else if (ucs_likely((length <= phase->send_thresh.max_short_max) &&
-                          (phase->send_thresh.max_short_max != 0) &&
-                          (is_send_contig))) {
-        step->fragment_length = (ucs_likely((dt_len <= phase->send_thresh.max_short_one && (dt_len != 0)))) ?
-                                phase->send_thresh.max_short_one - (phase->send_thresh.max_short_one % dt_len) :
-                                phase->send_thresh.max_short_one;
+                          (phase->send_thresh.max_short_max != 0))) {
+        if (ucs_likely(dt_len <= phase->send_thresh.max_short_one)) {
+            /* Short send - multiple messages */
+            step->fragment_length = phase->send_thresh.max_short_one - (phase->send_thresh.max_short_one % dt_len);
+        } else {
+            step->fragment_length = phase->send_thresh.max_short_one;
+        }
         ucs_assert(step->fragment_length > 0);
         *send_flag = (enum ucg_builtin_op_step_flags)(UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_SHORT |
                 UCG_BUILTIN_OP_STEP_FLAG_FRAGMENTED);
@@ -778,8 +846,7 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_send_flags(ucg_builtin_
      * Large messages, if supported (e.g. RDMA "zero-copy")
      */
     } else if (ucs_unlikely((length >  phase->send_thresh.max_bcopy_max) &&
-                            (phase->md_attr->cap.max_reg) &&
-                            (is_send_contig))) {
+                            (phase->md_attr->cap.max_reg))) {
         if (ucs_likely(length < phase->send_thresh.max_zcopy_one)) {
             /* ZCopy send - single message */
             *send_flag            = UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_ZCOPY;
@@ -867,7 +934,7 @@ static UCS_F_ALWAYS_INLINE void ucg_builtin_step_fragment_flags(size_t thresh_on
 static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_recv_flags(ucg_builtin_op_step_t *step,
                                                                     ucg_builtin_plan_phase_t *phase,
                                                                     const ucg_collective_params_t *params,
-                                                                    size_t dt_len, int is_recv_contig,
+                                                                    size_t dt_len,
                                                                     enum ucg_builtin_op_step_flags *recv_flag)
 {
     *recv_flag = (enum ucg_builtin_op_step_flags)0;
@@ -883,10 +950,10 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_recv_flags(ucg_builtin_
     /*
      * Short messages (e.g. RDMA "inline")
      */
-    if (length <= phase->recv_thresh.max_short_one && is_recv_contig) {
+    if (length <= phase->recv_thresh.max_short_one) {
         /* Short send - single message */
         step->fragments_recv = 1;
-    } else if (length <= phase->recv_thresh.max_short_max && is_recv_contig) {
+    } else if (length <= phase->recv_thresh.max_short_max) {
         /* Short send - multiple messages */
         ucg_builtin_step_fragment_flags(phase->recv_thresh.max_short_one, dt_len, length,
                                         step, phase, recv_flag);
@@ -894,7 +961,7 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_recv_flags(ucg_builtin_
      * Large messages, if supported (e.g. RDMA "zero-copy")
      */
     } else if ((length > phase->recv_thresh.max_bcopy_max) &&
-        (length <= phase->recv_thresh.md_attr_cap_max_reg) && is_recv_contig) {
+               (length <= phase->recv_thresh.md_attr_cap_max_reg)) {
         if (length < phase->recv_thresh.max_zcopy_one) {
             /* ZCopy send - single message */
             step->fragments_recv = 1;
@@ -957,12 +1024,13 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
                                      int8_t **current_data_buffer,
                                      ucg_builtin_op_step_t *step)
 {
-    ucs_status_t status;
     /* Set the parameters determining the send-flags later on */
-    int is_send_contig       = params->send.dt_len ? UCP_DT_IS_CONTIG(send_dtype) : 1;
-    int is_recv_contig       = params->recv.dt_len ? UCP_DT_IS_CONTIG(recv_dtype) : 1;
+    int is_send_contig       = UCG_DT_IS_CONTIG(params, send_dtype);
+    int is_recv_contig       = UCG_DT_IS_CONTIG(params, recv_dtype);
     size_t send_dt_len       = is_send_contig ? params->send.dt_len :
                                ucg_builtin_get_dt_len(ucp_dt_generic(send_dtype));
+    size_t recv_dt_len       = is_recv_contig ? params->recv.dt_len :
+                               ucg_builtin_get_dt_len(ucp_dt_generic(recv_dtype));
     step->buffer_length      = send_dt_len * params->send.count;
     step->uct_md             = phase->md;
     if (phase->md) {
@@ -983,9 +1051,10 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
                     (int8_t*)params->recv.buf : (int8_t*)params->send.buf;
     step->send_cb            = NULL;
 
-    step->bcopy.pack_state.dt.generic.state   = NULL;
-    step->bcopy.unpack_state.dt.generic.state = NULL;
-    step->bcopy.pack_state_recv.dt.generic.state = NULL;
+    step->non_contig.contig_buffer = NULL;
+    step->non_contig.pack_state.dt.generic.state   = NULL;
+    step->non_contig.unpack_state.dt.generic.state = NULL;
+    step->non_contig.pack_state_recv.dt.generic.state = NULL;
 
     /* special parameter of buffer length should be set for allgather with bruck plan */
     if (phase->method == UCG_PLAN_METHOD_ALLGATHER_BRUCK) {
@@ -1067,7 +1136,7 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
     recv_flag = (enum ucg_builtin_op_step_flags) 0;
     send_flag = (enum ucg_builtin_op_step_flags) 0;
     /* Note: in principle, step->send_buffer should not be changed after this function */
-    status = ucg_builtin_step_send_flags(step, phase, params, send_dt_len, is_send_contig, &send_flag);
+    ucs_status_t status = ucg_builtin_step_send_flags(step, phase, params, send_dt_len, &send_flag);
     extra_flags |= (send_flag & UCG_BUILTIN_OP_STEP_FLAG_FRAGMENTED);
     if (ucs_unlikely(status != UCS_OK)) {
         return status;
@@ -1186,9 +1255,8 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
             ucs_error("Invalid method for a collective operation.");
             return UCS_ERR_INVALID_PARAM;
     }
-    size_t recv_dt_len = is_recv_contig ? params->recv.dt_len :
-                         ucg_builtin_get_dt_len(ucp_dt_generic(recv_dtype));
-    status = ucg_builtin_step_recv_flags(step, phase, params, recv_dt_len, is_recv_contig, &recv_flag);
+
+    status = ucg_builtin_step_recv_flags(step, phase, params, recv_dt_len, &recv_flag);
     if (status != UCS_OK) {
         return status;
     }
@@ -1226,8 +1294,10 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
         phase->recv_cache_buffer = NULL;
     }
 
+    ucg_builtin_step_set_contig(step, (is_send_contig || is_recv_contig));
+
     /* Select the right completion callback */
-    return ucg_builtin_step_select_callbacks(phase, UCP_DT_IS_CONTIG(recv_dtype), &step->recv_cb,
+    return ucg_builtin_step_select_callbacks(phase, is_recv_contig, &step->recv_cb,
                                              params->send.count > 0, recv_flag);
 }
 
@@ -1249,8 +1319,8 @@ void ucg_builtin_swap_net_recv(char *netdata, size_t length, size_t offset,
 {
     ucg_builtin_op_step_t *step = req->step;
     ucp_dt_generic_t *gen_dt = req->op->recv_dt;
-    void *state_pack = step->bcopy.pack_state_recv.dt.generic.state;
-    void *state_unpack = step->bcopy.unpack_state.dt.generic.state;
+    void *state_pack = step->non_contig.pack_state_recv.dt.generic.state;
+    void *state_unpack = step->non_contig.unpack_state.dt.generic.state;
     char *recv_buffer = (char *)step->recv_buffer;
     char *tmp_buffer = NULL;
 
@@ -1312,7 +1382,7 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
         if (ucs_unlikely(status != UCS_OK)) {
             return status;
         }
-        op->send_dt = (!UCP_DT_IS_CONTIG(send_dtype)) ? ucp_dt_generic(send_dtype) :
+        op->send_dt = (!UCG_DT_IS_CONTIG(params, send_dtype)) ? ucp_dt_generic(send_dtype) :
                       op->send_dt;
     }
 
@@ -1321,7 +1391,7 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
         if (ucs_unlikely(status != UCS_OK)) {
             return status;
         }
-        op->recv_dt = (!UCP_DT_IS_CONTIG(recv_dtype)) ? ucp_dt_generic(recv_dtype) :
+        op->recv_dt = (!UCG_DT_IS_CONTIG(params, recv_dtype)) ? ucp_dt_generic(recv_dtype) :
                       op->recv_dt;
     }
 
@@ -1330,7 +1400,7 @@ ucs_status_t ucg_builtin_op_create(ucg_plan_t *plan,
     g_myidx = plan->my_index;
     ucs_debug("ucg rank: %" PRIu64 " phase cnt %u", g_myidx, phase_count);
     /* Select the right initialization callback */
-    status = ucg_builtin_op_select_callback(builtin_plan, send_dtype, recv_dtype, &op->init_cb, &op->final_cb);
+    status = ucg_builtin_op_select_callback(builtin_plan, UCG_DT_IS_CONTIG(params, send_dtype), UCG_DT_IS_CONTIG(params, recv_dtype), &op->init_cb, &op->final_cb);
     if (status != UCS_OK) {
         goto op_cleanup;
     }
