@@ -146,19 +146,20 @@ typedef struct ucg_builtin_op_step {
     ucg_builtin_comp_send_cb_t send_cb;
     ucg_builtin_comp_recv_cb_t recv_cb;
 
-    /* Fields intended for zero-copy */
-    union {
+    /* Fields intended for non-contig datatypes */
     struct {
+        int8_t                *contig_buffer;
         ucp_dt_state_t         pack_state;
         ucp_dt_state_t         unpack_state;
         ucp_dt_state_t         pack_state_recv;
-    } bcopy;
+    } non_contig;
+
+    /* Fields intended for zero-copy */
     struct {
         uct_mem_h              memh;
         ucg_builtin_zcomp_t   *zcomp;
         uint32_t               num_store; /* < number of step's store zcopy messages */
     } zcopy;
-    };
 } ucg_builtin_op_step_t;
 
 typedef struct ucg_builtin_comp_slot ucg_builtin_comp_slot_t;
@@ -258,6 +259,13 @@ struct ucg_builtin_comp_slot {
 #define UCG_BUILTIN_MAX_CONCURRENT_OPS 16
 
 #define UCG_BUILTIN_NUM_PROCS_DOUBLE 2
+
+/*
+ * If send data length is zero (MPI_Barrier, etc.) , UCP_DT_IS_CONTIG(_datatype)
+ * is 0 but expected be 1. So we use UCG_DT_IS_CONTIG instead.
+ */
+#define UCG_DT_IS_CONTIG(_params, _datatype) \
+    ((_params->send.dt_len) ? (UCP_DT_IS_CONTIG(_datatype)) : 1)
 
 END_C_DECLS
 

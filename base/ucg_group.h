@@ -8,6 +8,7 @@
 
 #include "ucg_plan.h"
 #include "../api/ucg.h"
+#include <ucs/datastruct/khash.h>
 
 #include <ucs/stats/stats.h>
 
@@ -35,6 +36,8 @@ extern size_t ucg_ctx_worker_offset;
 #define UCG_ROOT_RANK(params) \
     ((params)->type.root)
 
+__KHASH_TYPE(ucg_groups_ep, ucg_group_member_index_t, ucp_ep_h)
+
 /*
  * To enable the "Groups" feature in UCX - it's registered as part of the UCX
  * context - and allocated a context slot in each UCP Worker at a certain offset.
@@ -45,6 +48,8 @@ typedef struct ucg_groups {
 
     unsigned              iface_cnt;
     uct_iface_h           ifaces[UCG_GROUP_MAX_IFACES];
+
+    khash_t(ucg_groups_ep) eps;                 /**< endpoints created */
 
     size_t                total_planner_sizes;
     unsigned              num_planners;

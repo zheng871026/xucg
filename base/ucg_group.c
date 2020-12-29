@@ -46,9 +46,6 @@ static ucs_stats_class_t ucg_group_stats_class = {
 
 #define UCG_GROUP_PROGRESS_ADD(iface, ctx) {         \
     unsigned idx = 0;                                \
-    if (ucs_unlikely(idx == UCG_GROUP_MAX_IFACES)) { \
-        return UCS_ERR_EXCEEDS_LIMIT;                \
-    }                                                \
     while (idx < (ctx)->iface_cnt) {                 \
         if ((ctx)->ifaces[idx] == (iface)) {         \
             break;                                   \
@@ -59,6 +56,10 @@ static ucs_stats_class_t ucg_group_stats_class = {
         (ctx)->ifaces[(ctx)->iface_cnt++] = (iface); \
     }                                                \
 }
+
+__KHASH_IMPL(ucg_groups_ep, static UCS_F_MAYBE_UNUSED inline,
+            ucg_group_member_index_t, ucp_ep_h, 1, kh_int64_hash_func,
+            kh_int64_hash_equal);
 
 unsigned ucg_worker_progress(ucg_worker_h worker)
 {
@@ -113,6 +114,19 @@ void ucg_init_group_root_used(struct ucg_group *new_group)
     }
 }
 
+static void ucg_group_clean_topo_map(ucg_group_params_t *params, unsigned index)
+{
+    unsigned i;
+    for (i = 0; i <= index; i++) {
+        if(params->topo_map[i] != NULL) {
+            ucs_free(params->topo_map[i]);
+            params->topo_map[i] = NULL;
+        }
+    }
+    ucs_free(params->topo_map);
+    params->topo_map = NULL;
+}
+
 ucs_status_t ucg_init_group(ucg_worker_h worker,
                             const ucg_group_params_t *params,
                             ucg_groups_t *ctx,
@@ -145,7 +159,11 @@ ucs_status_t ucg_init_group(ucg_worker_h worker,
         unsigned i;
         for (i = 0; i < params->member_count; i++) {
             unsigned topo_size = sizeof(char) * params->member_count;
-            new_group->params.topo_map[i] = UCS_ALLOC_CHECK(topo_size, "topo map");
+            new_group->params.topo_map[i] = (char*)malloc(topo_size);
+            if (new_group->params.topo_map[i] == NULL) {
+                ucg_group_clean_topo_map(&new_group->params, i);
+                return UCS_ERR_NO_MEMORY;
+            }
             memcpy(new_group->params.topo_map[i], params->topo_map[i], topo_size);
         }
     }
@@ -153,32 +171,13 @@ ucs_status_t ucg_init_group(ucg_worker_h worker,
     return UCS_OK;
 }
 
-static void ucg_group_clean_topo_map(ucg_group_params_t *params)
-{
-    unsigned i;
-    for (i = 0; i < params->member_count; i++) {
-        if (params->topo_map[i] != NULL) {
-            ucs_free(params->topo_map[i]);
-            params->topo_map[i] = NULL;
-        }
-    }
-    ucs_free(params->topo_map);
-    params->topo_map = NULL;
-}
-
 static void ucg_group_clean_planners(ucg_groups_t *ctx,
                                      int planner_idx,
                                      struct ucg_group *new_group)
 {
-    if (planner_idx == 0) {
-        if (new_group->params.topo_map) {
-            ucg_group_clean_topo_map(&new_group->params);
-        }
-    } else {
-        while (planner_idx >= 0) {
-            ucg_plan_component_t *planner = ctx->planners[planner_idx--].plan_component;
-            planner->destroy((void*)new_group);
-        }
+    while (planner_idx >= 0) {
+        ucg_plan_component_t *planner = ctx->planners[planner_idx--].plan_component;
+        planner->destroy((void*)new_group);
     }
     ucs_free(new_group);
     new_group = NULL;
@@ -226,7 +225,9 @@ ucs_status_t ucg_group_create(ucg_worker_h worker,
     int idx = 0;
     status = ucg_init_group(worker, params, ctx, distance_size, nodenumber_size, new_group);
     if (status != UCS_OK) {
-        goto cleanup_planners;
+        ucs_free(new_group);
+        new_group = NULL;
+        goto cleanup_none;
     }
 
     status = ucg_group_planner_create(ctx, worker, new_group, &idx);
@@ -651,6 +652,9 @@ ucs_status_t ucg_worker_groups_init(void *groups_ctx)
     gctx->iface_cnt           = 0;
     gctx->total_planner_sizes = group_ctx_offset;
     ucs_list_head_init(&gctx->groups_head);
+
+    kh_init_inplace(ucg_groups_ep, &gctx->eps);
+
     return UCS_OK;
 }
 
@@ -665,6 +669,8 @@ void ucg_worker_groups_cleanup(void *groups_ctx)
             ucg_group_destroy(group);
         }
     }
+
+    kh_destroy_inplace(ucg_groups_ep, &gctx->eps);
 
     ucg_plan_release_list(gctx->planners, gctx->num_planners);
 }
@@ -707,59 +713,74 @@ ucs_status_t ucg_plan_connect(ucg_group_h group, ucg_group_member_index_t index,
                               const uct_md_attr_t** md_attr_p, ucp_ep_h *ucp_ep_p)
 {
     /* fill-in UCP connection parameters */
-    size_t remote_addr_len;
-    ucp_address_t *remote_addr = NULL;
-    ucs_status_t status = group->params.resolve_address_f(group->params.cb_group_obj,
-                                                          index, &remote_addr, &remote_addr_len);
-    if (status != UCS_OK) {
-        ucs_error("failed to obtain a UCP endpoint from the external callback");
-        return status;
-    }
-
-    /* special case: connecting to a zero-length address means it's "debugging" */
-    if (ucs_unlikely(remote_addr_len == 0)) {
-        *ep_p = NULL;
-        return UCS_OK;
-    }
-
-    /* create an endpoint for communication with the remote member */
     ucp_ep_h ucp_ep = NULL;
-    ucp_ep_params_t ep_params = {
-        .field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
-        .address = remote_addr
-    };
-
-    status = ucp_ep_create(group->worker, &ep_params, &ucp_ep);
-    if (status != UCS_OK) {
-        goto connect_cleanup;
-    }
-
-    status = ucp_wireup_connect_remote(ucp_ep, ucp_ep_get_am_lane(ucp_ep));
-    if (status != UCS_OK) {
-        goto connect_cleanup;
-    }
-
-    while ((ucp_ep->flags & UCP_EP_FLAG_REMOTE_CONNECTED) == 0) {
-        ucp_worker_progress(group->worker);
-    }
-
-    do {
-        *ep_p = ucp_ep_get_am_uct_ep(ucp_ep);
-        if (ucp_proxy_ep_test(*ep_p)) {
-            ucp_proxy_ep_t *proxy_ep = ucs_derived_of(*ep_p, ucp_proxy_ep_t);
-            *ep_p = proxy_ep->uct_ep;
-        }
-
-        ucs_assert((*ep_p)->iface != NULL);
-        if ((*ep_p)->iface->ops.ep_am_short !=
-            (typeof((*ep_p)->iface->ops.ep_am_short))ucs_empty_function_return_no_resource) {
-            break;
-        }
-        ucp_worker_progress(group->worker);
-    } while (1);
-
-    /* Register interfaces to be progressed in future calls */
+    ucp_address_t *remote_addr = NULL;
+    ucs_status_t status = UCS_OK;
+    ucg_group_member_index_t global_index = group->params.mpi_global_idx_f(group->params.cb_group_obj, index);
     ucg_groups_t *gctx = UCG_WORKER_TO_GROUPS_CTX(group->worker);
+    int ret = 0;
+    khiter_t iter = kh_get(ucg_groups_ep, &gctx->eps, global_index);
+    if (iter != kh_end(&gctx->eps)) {
+        /* Use the cached connection */
+        ucp_ep = kh_value(&gctx->eps, iter);
+    } else {
+        size_t remote_addr_len;
+        status = group->params.resolve_address_f(group->params.cb_group_obj,
+                                                 index, &remote_addr, &remote_addr_len);
+        if (status != UCS_OK) {
+            ucs_error("failed to obtain a UCP endpoint from the external callback");
+            return status;
+        }
+
+        /* special case: connecting to a zero-length address means it's "debugging" */
+        if (ucs_unlikely(remote_addr_len == 0)) {
+            *ep_p = NULL;
+            return UCS_OK;
+        }
+        /* create an endpoint for communication with the remote member */
+        ucp_ep_params_t ep_params = {
+            .field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
+            .address = remote_addr
+        };
+
+        status = ucp_ep_create(group->worker, &ep_params, &ucp_ep);
+        if (status != UCS_OK) {
+            goto connect_cleanup;
+        }
+
+        /* Store this endpoint, for future reference */
+        iter = kh_put(ucg_groups_ep, &gctx->eps, global_index, &ret);
+        kh_value(&gctx->eps, iter) = ucp_ep;
+    }
+
+    /* Connect for point-to-point communication */
+    ucp_lane_index_t lane;
+am_retry:
+    lane = ucp_ep_get_am_lane(ucp_ep);
+    *ep_p = ucp_ep_get_am_uct_ep(ucp_ep);
+
+    if (*ep_p == NULL) {
+        status = ucp_wireup_connect_remote(ucp_ep, lane);
+        if (status != UCS_OK) {
+           goto connect_cleanup;
+        }
+        goto am_retry; /* Just to obtain the right lane */
+    }
+
+    if (ucp_proxy_ep_test(*ep_p)) {
+        ucp_proxy_ep_t *proxy_ep = ucs_derived_of(*ep_p, ucp_proxy_ep_t);
+        *ep_p = proxy_ep->uct_ep;
+        ucs_assert(*ep_p != NULL);
+    }
+
+    ucs_assert((*ep_p)->iface != NULL);
+    if ((*ep_p)->iface->ops.ep_am_short ==
+            (typeof((*ep_p)->iface->ops.ep_am_short))
+            ucs_empty_function_return_no_resource) {
+        ucp_worker_progress(group->worker);
+        goto am_retry;
+    }
+
     UCG_GROUP_PROGRESS_ADD((*ep_p)->iface, group);
     UCG_GROUP_PROGRESS_ADD((*ep_p)->iface, gctx);
 

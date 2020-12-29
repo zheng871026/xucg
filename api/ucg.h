@@ -154,6 +154,9 @@ typedef struct ucg_group_params {
 
     dt_convert_f mpi_dt_convert;
 
+    /* Callback function for get rank in MPI_COMM_WORLD */
+    ucg_group_member_index_t (*mpi_global_idx_f) (void *cb_group_obj, ucg_group_member_index_t index);
+
     dt_span_f mpi_datatype_span;
     char is_socket_balance;
 } ucg_group_params_t;
@@ -289,9 +292,7 @@ ucs_status_t ucg_collective_create(ucg_group_h group,
  * @return otherwise        - Operation was scheduled for send and can be
  *                          completed in any point in time. The request handle
  *                          is returned to the application in order to track
- *                          progress of the message. The application is
- *                          responsible to release the handle using
- *                          @ref ucg_request_free routine.
+ *                          progress of the message.
  */
 ucs_status_ptr_t ucg_collective_start_nb(ucg_coll_h coll);
 
