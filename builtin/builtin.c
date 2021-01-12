@@ -242,21 +242,21 @@ UCS_PROFILE_FUNC(ucs_status_t, ucg_builtin_am_handler,
     ucs_assert(length >= sizeof(header));
     if ((*ctx)->slots_total > group_id) {
         slot = &(*ctx)->slots[group_id][header->coll_id % UCG_BUILTIN_MAX_CONCURRENT_OPS];
-    } else {
-        /* rank A and rank B both creating a new group, This is creates a "race condition",
-        where A maybe sends a message to B before B finished creating the group.
-        At this point, we will encounter the situation that slots_total and group_id are equal.
-        Therefore, we need to store the message and process it when B creates the group. */
-        ucg_builtin_am_buffer_t *buffer = &(*ctx)->buffer;
-        buffer->data                    = data;
-        buffer->group_id                = group_id;
-        buffer->length                  = length;
-        buffer->am_flags                = am_flags;
-        buffer->used                    = 1;
-        return (am_flags & UCT_CB_PARAM_FLAG_DESC) ? UCS_INPROGRESS : UCS_OK;
+        if (slot != NULL) {
+            return ucg_builtin_am_process(slot, data, length, am_flags);
+        }
     }
-
-    return ucg_builtin_am_process(slot, data, length, am_flags);
+    /* rank A and rank B both creating a new group, This is creates a "race condition",
+    where A maybe sends a message to B before B finished creating the group.
+    At this point, we will encounter the situation that slots_total and group_id are equal.
+    Therefore, we need to store the message and process it when B creates the group. */
+    ucg_builtin_am_buffer_t *buffer = &(*ctx)->buffer;
+    buffer->data                    = data;
+    buffer->group_id                = group_id;
+    buffer->length                  = length;
+    buffer->am_flags                = am_flags;
+    buffer->used                    = 1;
+    return (am_flags & UCT_CB_PARAM_FLAG_DESC) ? UCS_INPROGRESS : UCS_OK;
 }
 
 void ucg_builtin_msg_dump(ucp_worker_h worker, uct_am_trace_type_t type,
@@ -418,9 +418,9 @@ void ucg_builtin_release_comp_desc(ucg_builtin_comp_desc_t *desc)
 
 static void ucg_builtin_destroy(ucg_group_h group)
 {
-    ucg_builtin_group_ctx_t *gctx =
-            UCG_GROUP_TO_COMPONENT_CTX(ucg_builtin_component, group);
-
+    ucg_builtin_group_ctx_t *gctx = UCG_GROUP_TO_COMPONENT_CTX(ucg_builtin_component, group);
+    ucg_builtin_ctx_t **bctx = UCG_WORKER_TO_COMPONENT_CTX(ucg_builtin_component, group->worker);
+    (*bctx)->slots[group->group_id] = NULL;
     unsigned i;
     for (i = 0; i < UCG_BUILTIN_MAX_CONCURRENT_OPS; i++) {
         if (gctx->slots[i].cb != NULL) {
