@@ -737,7 +737,7 @@ ucg_builtin_init_state(ucg_builtin_op_step_t *step, int option,
             break;
 
         default:
-            ucs_warn("ucg_builtin_init_state, invalid option:%d", option);
+            ucs_debug("ucg_builtin_init_state, invalid option:%d", option);
             break;
     }
 }
@@ -767,7 +767,7 @@ ucg_builtin_finalize_state(ucg_builtin_op_step_t *step, int option,
             break;
 
         default:
-            ucs_warn("ucg_builtin_finalize_state, invalid option:%d", option);
+            ucs_debug("ucg_builtin_finalize_state, invalid option:%d", option);
             break;
     }
 }

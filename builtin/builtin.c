@@ -280,7 +280,7 @@ static ucs_status_t ucg_builtin_init_plan_config(ucg_plan_component_t *plan_comp
     /* K-nomial tree algorithm require all K vaule is bigger than 1 */
     if (config->bmtree.degree_inter_fanout <= 1 || config->bmtree.degree_inter_fanin <= 1 ||
         config->bmtree.degree_intra_fanout <= 1 || config->bmtree.degree_intra_fanin <= 1) {
-        ucs_warn("K-nomial tree algorithm require all K vaule is bigger than one, switch to default parameter sets");
+        ucs_info("K-nomial tree algorithm require all K vaule is bigger than one, switch to default parameter sets");
         config->bmtree.degree_inter_fanout = DEFAULT_INTER_KVALUE;
         config->bmtree.degree_inter_fanin  = DEFAULT_INTER_KVALUE;
         config->bmtree.degree_intra_fanout = DEFAULT_INTRA_KVALUE;
@@ -424,7 +424,7 @@ static void ucg_builtin_destroy(ucg_group_h group)
     unsigned i;
     for (i = 0; i < UCG_BUILTIN_MAX_CONCURRENT_OPS; i++) {
         if (gctx->slots[i].cb != NULL) {
-            ucs_warn("Collective operation #%u has been left incomplete (Group #%u)",
+            ucs_debug("Collective operation #%u has been left incomplete (Group #%u)",
                      gctx->slots[i].coll_id, gctx->group_id);
         }
 
@@ -432,7 +432,7 @@ static void ucg_builtin_destroy(ucg_group_h group)
             ucg_builtin_comp_desc_t *desc =
                     ucs_list_extract_head(&gctx->slots[i].msg_head,
                                           ucg_builtin_comp_desc_t, super.tag_list[0]);
-            ucs_warn("Collective operation #%u has %u bytes left pending for step #%u (Group #%u)",
+            ucs_debug("Collective operation #%u has %u bytes left pending for step #%u (Group #%u)",
                      desc->header.coll_id, desc->super.length, desc->header.step_idx, desc->header.group_id);
             ucg_builtin_release_comp_desc(desc);
         }
@@ -805,26 +805,26 @@ ucs_status_t ucg_builtin_allreduce_algo_switch(const enum ucg_builtin_allreduce_
 void ucg_builtin_check_algorithm_param_size(ucg_builtin_config_t *config)
 {
     if (((int)config->allreduce_algorithm >= UCG_ALGORITHM_ALLREDUCE_LAST) || ((int)config->allreduce_algorithm < UCG_ALGORITHM_ALLREDUCE_AUTO_DECISION)) {
-        ucs_warn("Param UCX_BUILTIN_ALLREDUCE_ALGORITHM=%d is invalid parameter, switch to default algorithm.", (int)config->allreduce_algorithm);
+        ucs_info("Param UCX_BUILTIN_ALLREDUCE_ALGORITHM=%d is invalid parameter, switch to default algorithm.", (int)config->allreduce_algorithm);
     }
     if (((int)config->bcast_algorithm >= UCG_ALGORITHM_BCAST_LAST) || ((int)config->bcast_algorithm < UCG_ALGORITHM_BCAST_AUTO_DECISION)) {
-        ucs_warn("Param UCX_BUILTIN_BCAST_ALGORITHM=%d is invalid parameter, switch to default algorithm.", (int)config->bcast_algorithm);
+        ucs_info("Param UCX_BUILTIN_BCAST_ALGORITHM=%d is invalid parameter, switch to default algorithm.", (int)config->bcast_algorithm);
     }
     if (((int)config->barrier_algorithm >= UCG_ALGORITHM_BARRIER_LAST) || ((int)config->barrier_algorithm < UCG_ALGORITHM_BARRIER_AUTO_DECISION)) {
-        ucs_warn("Param UCX_BUILTIN_BARRIER_ALGORITHM=%d is invalid parameter, switch to default algorithm.", (int)config->barrier_algorithm);
+        ucs_info("Param UCX_BUILTIN_BARRIER_ALGORITHM=%d is invalid parameter, switch to default algorithm.", (int)config->barrier_algorithm);
     }
 }
 
 void ucg_builtin_check_algorithm_param_type(ucg_builtin_config_t *config)
 {
     if ((config->allreduce_algorithm - (int)config->allreduce_algorithm) != 0) {
-        ucs_warn("Param UCX_BUILTIN_ALLREDUCE_ALGORITHM=%lf is not unsigned integer, switch to unsigned integer '%d'.", config->allreduce_algorithm, (int)config->allreduce_algorithm);
+        ucs_info("Param UCX_BUILTIN_ALLREDUCE_ALGORITHM=%lf is not unsigned integer, switch to unsigned integer '%d'.", config->allreduce_algorithm, (int)config->allreduce_algorithm);
     }
     if ((config->bcast_algorithm - (int)config->bcast_algorithm) != 0) {
-        ucs_warn("Param UCX_BUILTIN_BCAST_ALGORITHM=%lf is not unsigned integer, switch to unsigned integer '%d'.", config->bcast_algorithm, (int)config->bcast_algorithm);
+        ucs_info("Param UCX_BUILTIN_BCAST_ALGORITHM=%lf is not unsigned integer, switch to unsigned integer '%d'.", config->bcast_algorithm, (int)config->bcast_algorithm);
     }
     if ((config->barrier_algorithm - (int)config->barrier_algorithm) != 0) {
-        ucs_warn("Param UCX_BUILTIN_BARRIER_ALGORITHM=%lf is not unsigned integer, switch to unsigned integer '%d'.", config->barrier_algorithm, (int)config->barrier_algorithm);
+        ucs_info("Param UCX_BUILTIN_BARRIER_ALGORITHM=%lf is not unsigned integer, switch to unsigned integer '%d'.", config->barrier_algorithm, (int)config->barrier_algorithm);
     }
 }
 
@@ -978,10 +978,10 @@ void ucg_builtin_non_commutative_operation(const ucg_group_params_t *group_param
         (algo->feature_flag & UCG_ALGORITHM_SUPPORT_NON_COMMUTATIVE_OPS)) {
         if (coll_params->send.count > 1) {
             ucg_builtin_plan_decision_in_noncommutative_many_counts_case();
-            ucs_warn("Current algorithm does not support many counts non-commutative operation, and switch to Recursive doubling which may have unexpected performance");
+            ucs_info("Current algorithm does not support many counts non-commutative operation, and switch to Recursive doubling which may have unexpected performance");
         } else {
             ucg_builtin_plan_decision_in_noncommutative_largedata_case(msg_size, NULL);
-            ucs_warn("Current algorithm does not support non commutative operation, and switch to Recursive doubling or Ring Algorithm which may have unexpected performance");
+            ucs_info("Current algorithm does not support non commutative operation, and switch to Recursive doubling or Ring Algorithm which may have unexpected performance");
         }
     }
 }
@@ -1046,7 +1046,7 @@ ucs_status_t ucg_builtin_change_unsupport_algo(struct ucg_builtin_algorithm *alg
     /* Special Case 1 : bind-to none */
     if (!(algo->feature_flag & UCG_ALGORITHM_SUPPORT_BIND_TO_NONE) && (group_params->is_bind_to_none)) {
         ucg_builtin_plan_decision_in_unsupport_case(msg_size, group_params, ops_type_choose, coll_params);
-        ucs_warn("Current algorithm don't support bind-to none case, switch to default algorithm");
+        ucs_info("Current algorithm don't support bind-to none case, switch to default algorithm");
     }
 
     /* Special Case 2 : unbalance ppn */
@@ -1058,7 +1058,7 @@ ucs_status_t ucg_builtin_change_unsupport_algo(struct ucg_builtin_algorithm *alg
 
     if (is_ppn_unbalance && (!(algo->feature_flag & UCG_ALGORITHM_SUPPORT_UNBALANCE_PPN))) {
         ucg_builtin_plan_decision_in_unsupport_case(msg_size, group_params, ops_type_choose, coll_params);
-        ucs_warn("Current algorithm don't support ppn unbalance case, switch to default algorithm");
+        ucs_info("Current algorithm don't support ppn unbalance case, switch to default algorithm");
     }
 
     /* Special Case 3 : discontinuous rank */
@@ -1075,7 +1075,7 @@ ucs_status_t ucg_builtin_change_unsupport_algo(struct ucg_builtin_algorithm *alg
 
     if (is_discontinuous_rank && (!(algo->feature_flag & UCG_ALGORITHM_SUPPORT_DISCONTINOUS_RANK))) {
         ucg_builtin_plan_decision_in_unsupport_case(msg_size, group_params, ops_type_choose, coll_params);
-        ucs_warn("Current algorithm demand rank number is continous. Switch default algorithm whose performance may be not the best");
+        ucs_info("Current algorithm demand rank number is continous. Switch default algorithm whose performance may be not the best");
     }
 
     if (ops_choose == OPS_ALLREDUCE) {
@@ -1086,7 +1086,7 @@ ucs_status_t ucg_builtin_change_unsupport_algo(struct ucg_builtin_algorithm *alg
         if (coll_params->send.dt_len > config->large_datatype_threshold &&
             !(algo->feature_flag & UCG_ALGORITHM_SUPPORT_LARGE_DATATYPE)) {
                 ucg_builtin_plan_decision_in_noncommutative_largedata_case(msg_size, NULL);
-                ucs_warn("Current algorithm does not support large datatype, and switch to Recursive doubling or Ring Algorithm which may have unexpected performance");
+                ucs_info("Current algorithm does not support large datatype, and switch to Recursive doubling or Ring Algorithm which may have unexpected performance");
         }
     }
 

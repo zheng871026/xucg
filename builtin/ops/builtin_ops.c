@@ -990,7 +990,7 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_recv_flags(ucg_builtin_
             partial_length = (length % fragment_length) > 0;
             step->fragments_recv = length / fragment_length + partial_length;
         } else {
-            ucs_warn("phase->recv_thresh.max_bcopy_one is negative or zero");
+            ucs_info("phase->recv_thresh.max_bcopy_one is negative or zero");
             partial_length = 0;
             step->fragments_recv = length;
         }
