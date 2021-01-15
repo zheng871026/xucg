@@ -1475,7 +1475,7 @@ static ucs_status_t ucg_builtin_topo_tree_build(const ucg_builtin_binomial_tree_
     /* case 1 */
     if (ucg_algo.topo_level == UCG_GROUP_HIERARCHY_LEVEL_SOCKET) {
         if (!params->group_params->is_socket_balance) {
-            ucs_warn("Warning: process number in every socket must be same in socket-aware algorithm, please make sure ppn "
+            ucs_info("Warning: process number in every socket must be same in socket-aware algorithm, please make sure ppn "
                     "must be even and '--map-by socket' included. Switch to corresponding node-aware algorithm already.");
             ucg_algo.topo_level = UCG_GROUP_HIERARCHY_LEVEL_NODE;
             status = choose_distance_from_topo_aware_level(&domain_distance);
