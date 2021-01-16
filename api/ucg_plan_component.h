@@ -13,8 +13,8 @@
 #include <uct/api/uct.h>
 #include <ucs/config/parser.h>
 #include <ucs/datastruct/mpool.h>
-#include <ucs/datastruct/list_types.h>
-#include <ucs/datastruct/queue_types.h>
+#include <ucs/datastruct/list.h>
+#include <ucs/datastruct/queue.h>
 
 BEGIN_C_DECLS
 
