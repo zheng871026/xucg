@@ -1306,7 +1306,7 @@ void  ucg_builtin_set_phase_thresh_max_bcopy_zcopy(ucg_builtin_group_ctx_t *ctx,
         }
         phase->send_thresh.max_zcopy_one = phase->ep_attr->cap.am.max_zcopy - sizeof(ucg_builtin_header_t);
     } else {
-        phase->send_thresh.max_zcopy_one = phase->send_thresh.max_bcopy_max = UCS_CONFIG_MEMUNITS_INF;
+        phase->send_thresh.max_zcopy_one = phase->send_thresh.max_bcopy_max = SIZE_MAX;
     }
 
     phase->send_thresh.max_bcopy_one -= phase->send_thresh.max_bcopy_one % DATATYPE_ALIGN;
@@ -1360,7 +1360,7 @@ ucs_status_t ucg_builtin_connect(ucg_builtin_group_ctx_t *ctx,
             phase_ep_index : 0] = idx;
 #endif
     if (!ep) {
-        phase->send_thresh.max_short_one = UCS_CONFIG_MEMUNITS_INF;
+        phase->send_thresh.max_short_one = SIZE_MAX;
         phase->md = NULL;
         phase->md_attr = NULL;
         return UCS_OK;
