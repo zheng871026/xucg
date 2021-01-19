@@ -711,7 +711,11 @@ ucs_status_t ucg_builtin_step_set_contig(ucg_builtin_op_step_t *step,
         status = uct_md_mem_reg(step->uct_md, step->non_contig.contig_buffer, 
                                 step->buffer_length, UCT_MD_MEM_ACCESS_ALL, &step->zcopy.memh);
         if (status != UCS_OK) {
-            ucs_error("contig_buffer md mem register failed.");
+            if (step->zcopy.zcomp != NULL) {
+                ucs_free(step->zcopy.zcomp);
+                step->zcopy.zcomp = NULL;
+            }
+            ucs_info("contig_buffer md mem register failed.");
             return status;
         }
     }
@@ -1187,6 +1191,10 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
                 status = uct_md_mem_reg(step->uct_md, step->send_buffer,
                                         step->buffer_length, UCT_MD_MEM_ACCESS_ALL, &step->zcopy.memh);
                 if (status != UCS_OK) {
+                    if (step->zcopy.zcomp != NULL) {
+                        ucs_free(step->zcopy.zcomp);
+                        step->zcopy.zcomp = NULL;
+                    }
                     return status;
                 }
             }

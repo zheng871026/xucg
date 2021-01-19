@@ -79,7 +79,7 @@ static ucs_status_t ucg_plan_read_config(ucg_plan_component_t *planc)
     /* read component's configuration */
     ucg_config_bundle_t *bundle = NULL;
     status = ucg_plan_config_read(&bundle, planc->plan_config_table,
-                                  planc->plan_config_size, NULL,
+                                  planc->plan_config_size, "UCX_",
                                   planc->cfg_prefix);
 
     if (bundle == NULL) {
