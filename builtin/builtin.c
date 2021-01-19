@@ -425,7 +425,7 @@ static void ucg_builtin_destroy(ucg_group_h group)
     for (i = 0; i < UCG_BUILTIN_MAX_CONCURRENT_OPS; i++) {
         if (gctx->slots[i].cb != NULL) {
             ucs_debug("Collective operation #%u has been left incomplete (Group #%u)",
-                     gctx->slots[i].coll_id, gctx->group_id);
+                      gctx->slots[i].coll_id, gctx->group_id);
         }
 
         while (!ucs_list_is_empty(&gctx->slots[i].msg_head)) {
@@ -433,7 +433,7 @@ static void ucg_builtin_destroy(ucg_group_h group)
                     ucs_list_extract_head(&gctx->slots[i].msg_head,
                                           ucg_builtin_comp_desc_t, super.tag_list[0]);
             ucs_debug("Collective operation #%u has %u bytes left pending for step #%u (Group #%u)",
-                     desc->header.coll_id, desc->super.length, desc->header.step_idx, desc->header.group_id);
+                      desc->header.coll_id, desc->super.length, desc->header.step_idx, desc->header.group_id);
             ucg_builtin_release_comp_desc(desc);
         }
     }
@@ -666,14 +666,13 @@ void ucg_builtin_fillin_algo(struct ucg_builtin_algorithm *algo,
     algo->ring = ring;
 }
 
-ucs_status_t ucg_builtin_init_algo(struct ucg_builtin_algorithm *algo)
+static void ucg_builtin_init_algo(struct ucg_builtin_algorithm *algo)
 {
     ucg_builtin_fillin_algo(algo, 1, 0, 0, 1, 0, 0);
     algo->bruck        = 1,
     algo->topo_level   = UCG_GROUP_HIERARCHY_LEVEL_NODE,
     algo->pipeline     = 0;
     algo->feature_flag = UCG_ALGORITHM_SUPPORT_COMMON_FEATURE;
-    return UCS_OK;
 }
 
 ucs_status_t ucg_builtin_bcast_algo_switch(const enum ucg_builtin_bcast_algorithm bcast_algo_decision,
@@ -1202,10 +1201,9 @@ static ucs_status_t ucg_builtin_plan(ucg_plan_component_t *plan_component,
 {
     ucs_status_t status;
     ucg_builtin_plan_t *plan = NULL;
-    ucg_builtin_group_ctx_t *builtin_ctx =
-            UCG_GROUP_TO_COMPONENT_CTX(ucg_builtin_component, group);
+    ucg_builtin_group_ctx_t *builtin_ctx = UCG_GROUP_TO_COMPONENT_CTX(ucg_builtin_component, group);
 
-    status = ucg_builtin_init_algo(&ucg_algo);
+    ucg_builtin_init_algo(&ucg_algo);
 
     status = ucg_builtin_algorithm_decision(coll_type, msg_size, builtin_ctx->group_params, coll_params, plan_component);
 
