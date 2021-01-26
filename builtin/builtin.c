@@ -1298,7 +1298,7 @@ void  ucg_builtin_set_phase_thresh_max_bcopy_zcopy(ucg_builtin_group_ctx_t *ctx,
 {
     phase->send_thresh.max_bcopy_one = phase->ep_attr->cap.am.max_bcopy - sizeof(ucg_builtin_header_t);
     phase->send_thresh.max_bcopy_max = ctx->config->bcopy_max_tx;
-    if (phase->md_attr->cap.max_reg) {
+    if (phase->md_attr->cap.max_reg && (phase->md_attr->cap.flags & UCT_MD_FLAG_NEED_MEMH)) {
         if (phase->send_thresh.max_bcopy_one > phase->send_thresh.max_bcopy_max) {
             phase->send_thresh.max_bcopy_one = phase->send_thresh.max_bcopy_max;
         }
@@ -1317,7 +1317,7 @@ void  ucg_builtin_set_phase_thresholds(ucg_builtin_group_ctx_t *ctx,
     ucg_builtin_set_phase_thresh_max_short(ctx, phase);
     ucg_builtin_set_phase_thresh_max_bcopy_zcopy(ctx, phase);
 
-    phase->send_thresh.md_attr_cap_max_reg = phase->md_attr->cap.max_reg;
+    phase->send_thresh.md_attr_cap_max_reg = (phase->md_attr->cap.flags & UCT_MD_FLAG_NEED_MEMH) ? phase->md_attr->cap.max_reg : 0;
     phase->send_thresh.initialized = 1;
 
     if (!phase->recv_thresh.initialized) {

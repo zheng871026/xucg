@@ -975,6 +975,7 @@ static ucs_status_t ucg_builtin_optimize_bcopy_to_zcopy(ucg_builtin_op_t *op)
         step = &op->steps[step_idx++];
         if ((step->flags & UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_BCOPY) &&
             (step->phase->md_attr->cap.max_reg > step->buffer_length) &&
+            (step->phase->md_attr->cap.flags & UCT_MD_FLAG_NEED_MEMH) &&
             step->buffer_length != 0) {
             status = ucg_builtin_step_zcopy_prep(step);
             if (status != UCS_OK) {
@@ -1024,7 +1025,8 @@ static ucs_status_t ucg_builtin_op_consider_optimization(ucg_builtin_op_t *op,
         do {
             step = &op->steps[step_idx++];
             if ((step->flags & UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_BCOPY) &&
-                (step->phase->md_attr->cap.max_reg > step->buffer_length)) {
+                (step->phase->md_attr->cap.max_reg > step->buffer_length) &&
+                (step->phase->md_attr->cap.flags & UCT_MD_FLAG_NEED_MEMH)) {
                 op->optm_cb = ucg_builtin_optimize_bcopy_to_zcopy;
                 op->opt_cnt = config->mem_reg_opt_cnt;
                 return UCS_OK;
