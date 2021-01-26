@@ -850,7 +850,7 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_send_flags(ucg_builtin_
      * Large messages, if supported (e.g. RDMA "zero-copy")
      */
     } else if (ucs_unlikely((length >  phase->send_thresh.max_bcopy_max) &&
-                            (phase->md_attr->cap.max_reg))) {
+                            (length <= phase->send_thresh.md_attr_cap_max_reg))) {
         if (ucs_likely(length < phase->send_thresh.max_zcopy_one)) {
             /* ZCopy send - single message */
             *send_flag            = UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_ZCOPY;
