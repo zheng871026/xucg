@@ -985,6 +985,31 @@ void ucg_builtin_non_commutative_operation(const ucg_group_params_t *group_param
     }
 }
 
+void ucg_builtin_update_op(const ucg_plan_t *plan, ucg_op_t *op,
+                           const ucg_collective_params_t *params)
+{
+    ucp_datatype_t send_dtype = UCP_DATATYPE_CONTIG;
+    ucp_datatype_t recv_dtype = UCP_DATATYPE_CONTIG;
+    ucg_builtin_plan_t *builtin_plan = (ucg_builtin_plan_t *)plan;
+    ucg_builtin_op_t *builtin_op = (ucg_builtin_op_t *)op;
+
+    builtin_op->send_dt = NULL;
+    builtin_op->recv_dt = NULL;
+    if (params->send.count > 0 && params->send.dt_len > 0) {
+        builtin_plan->convert_f(params->send.dt_ext, &send_dtype);
+        if (!UCG_DT_IS_CONTIG(params, send_dtype)) {
+            builtin_op->send_dt = ucp_dt_generic(send_dtype);
+        }
+    }
+
+    if (params->recv.count > 0 && params->recv.dt_len > 0) {
+        builtin_plan->convert_f(params->recv.dt_ext, &recv_dtype);
+        if (!UCG_DT_IS_CONTIG(params, recv_dtype)) {
+            builtin_op->recv_dt = ucp_dt_generic(recv_dtype);
+        }
+    }
+}
+
 int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
                                const ucg_collective_params_t *coll_params)
 {
