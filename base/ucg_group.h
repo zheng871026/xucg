@@ -91,6 +91,9 @@ struct ucg_group {
     /* Below this point - the private per-planner data is allocated/stored */
 };
 
+void ucg_builtin_update_op(const ucg_plan_t *plan, ucg_op_t *op,
+                           const ucg_collective_params_t *params);
+
 int ucg_is_segmented_allreduce(const ucg_collective_params_t *coll_params);
 
 int ucg_is_noncontig_allreduce(const ucg_group_params_t *group_params,
