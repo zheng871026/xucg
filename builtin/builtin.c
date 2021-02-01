@@ -985,6 +985,27 @@ void ucg_builtin_non_commutative_operation(const ucg_group_params_t *group_param
     }
 }
 
+int ucg_builtin_op_can_reuse(const ucg_plan_t *plan, const ucg_op_t *op,
+                             const ucg_collective_params_t *params)
+{
+    ucp_datatype_t send_dtype = UCP_DATATYPE_CONTIG;
+    ucg_builtin_plan_t *builtin_plan = (ucg_builtin_plan_t *)plan;
+    ucg_builtin_op_t *builtin_op = (ucg_builtin_op_t *)op;
+
+    if (builtin_op->send_dt != NULL) {
+        return 0;
+    }
+
+    if (params->send.count > 0) {
+        builtin_plan->convert_f(params->send.dt_ext, &send_dtype);
+        if (!UCG_DT_IS_CONTIG(params, send_dtype)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 void ucg_builtin_update_op(const ucg_plan_t *plan, ucg_op_t *op,
                            const ucg_collective_params_t *params)
 {

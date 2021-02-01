@@ -468,8 +468,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucg_collective_create,
     if (ucs_likely(plan != NULL)) {
         ucs_list_for_each(op, &plan->op_head, list) {
             if (!memcmp(&op->params, params, sizeof(*params)) &&
-                !plan->is_noncontig_allreduce) {
-                ucg_builtin_update_op(plan, op, params);
+                ucg_builtin_op_can_reuse(plan, op, params)) {
                 status = UCS_OK;
                 goto op_found;
             }
