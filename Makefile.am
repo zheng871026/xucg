@@ -26,7 +26,4 @@ nobase_dist_libucg_la_HEADERS = \
 	api/ucg_mpi.h \
 	api/ucg.h
 
-noinst_HEADERS = \
-	api/ucg_plan_component.h
-
 endif # HAVE_UCG
