@@ -95,8 +95,7 @@ typedef struct ucg_group {
     khash_t(ucg_groups_ep) eps;                 /**< endpoints created */
 } ucg_group_t;
 
-typedef struct ucg_group_ep
-{
+typedef struct ucg_group_ep {
     uct_ep_h am_ep;
     const uct_iface_attr_t *am_iface_attr;
     ucp_ep_h ucp_ep;

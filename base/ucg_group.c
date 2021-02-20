@@ -31,8 +31,8 @@ static ucs_stats_class_t ucg_group_stats_class = {
 #endif
 
 __KHASH_IMPL(ucg_groups_ep, static UCS_F_MAYBE_UNUSED inline,
-            ucg_group_member_index_t, ucp_ep_h, 1, kh_int64_hash_func,
-            kh_int64_hash_equal);
+             ucg_group_member_index_t, ucp_ep_h, 1, kh_int64_hash_func,
+             kh_int64_hash_equal);
 
 static ucs_status_t ucg_group_progress_add(uct_iface_h iface, ucg_group_h group)
 {
@@ -114,7 +114,7 @@ static void* ucg_dup_one_dim_array(const void* array,
                                    int member_count,
                                    const char *msg)
 {
-    int malloc_size = member_size* member_count;
+    int malloc_size = member_size * member_count;
     void* dup_array = ucs_malloc(malloc_size, msg);
     if (dup_array == NULL) {
         return NULL;
@@ -457,8 +457,8 @@ am_retry:
     }
     ucs_assert(am_ep->iface != NULL);
     if (am_ep->iface->ops.ep_am_short ==
-            (typeof(am_ep->iface->ops.ep_am_short))
-            ucs_empty_function_return_no_resource) {
+        (typeof(am_ep->iface->ops.ep_am_short))
+        ucs_empty_function_return_no_resource) {
         ucp_worker_progress(group->worker);
         goto am_retry;
     }
@@ -549,7 +549,7 @@ ucs_status_t ucg_group_select_planner(ucg_group_h group,
     int i = 0;
     if (planner_name != NULL && planner_name[0] != '\0') {
         ucs_list_for_each(planner, planners_head, list) {
-            if (0 == strcmp(planner->name, planner_name)) {
+            if (strcmp(planner->name, planner_name) == 0) {
                 *planner_p = planner;
                 *planner_ctx_p = group->planners_context[i];
                 return UCS_OK;

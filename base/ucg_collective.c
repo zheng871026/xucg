@@ -198,8 +198,6 @@ ucs_status_t ucg_request_check_status(void *request)
      *     ...; <-- request points here
      * }
      * so "request - 1" is the right address.
-     * TODO: Extract specific check_status() from request,
-     *       then call check_status(request)
      */
     ucg_request_t *req = (ucg_request_t*)request - 1;
 
@@ -220,8 +218,6 @@ void ucg_request_free(void *request)
     /* Depends on the implementation of op->trigger()
      * Currently, builtin uses the reuseable slot->req,
      * so this function does nothing.
-     * TODO: Extract specific free_request() from request,
-     *       then call free_request(request)
      */
     return;
 }
