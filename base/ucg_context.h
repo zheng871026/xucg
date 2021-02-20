@@ -14,9 +14,9 @@
 #include <ucs/debug/log.h>
 
 #define UCG_CHECK_REQUIRED_FIELD(_mask, _field, _label) \
-    if (!(_mask & _field)) { \
+    if (!((_mask) & (_field))) { \
         ucs_error("The field \"%s\" is required", #_field); \
-        goto _label; \
+        goto (_label); \
     }
 
 typedef struct ucg_config {

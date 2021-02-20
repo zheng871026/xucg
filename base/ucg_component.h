@@ -67,7 +67,7 @@ struct ucg_op {
 };
 
 struct ucg_plan {
-    /* Check whether this plan supports the collective or not, 1-support, 0-not support*/
+    /* Check whether this plan supports the collective or not, 1-support, 0-not support */
     int                    (*check)(const ucg_plan_t *plan,
                                     const ucg_collective_params_t *params);
     /* Destroy this plan */

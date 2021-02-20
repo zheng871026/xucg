@@ -1091,13 +1091,15 @@ static ucs_status_t ucg_builtin_binomial_tree_connect_fanin_fanout(ucg_builtin_p
         /* For fanin-fanout (e.g. allreduce) - copy existing connections */
         /* recursive or k-nomial tree for inter-nodes */
         /* especially for k-nomial tree, socket-aware algorithm (topo_level) ppx should be replaced by real ppn */
-        if (inter_node_topo_type == UCG_PLAN_RECURSIVE && ucg_builtin_algo_config.topo_level == UCG_GROUP_HIERARCHY_LEVEL_L3CACHE) {
+        if (inter_node_topo_type == UCG_PLAN_RECURSIVE &&
+            ucg_builtin_algo_config.topo_level == UCG_GROUP_HIERARCHY_LEVEL_L3CACHE) {
             status = ucg_builtin_binomial_tree_add_inter(tree, &tree->phss[(ppx > 1) ? 1 : 0], params, eps,
                 inter_node_topo_type, &phs_inc_cnt, &step_inc_cnt, (ppx != 1) ? pps : ppx, topo_params);
         } else {
             status = ucg_builtin_binomial_tree_add_inter(tree, &tree->phss[(ppx > 1) ? 1 : 0], params, eps,
                                                          inter_node_topo_type, &phs_inc_cnt, &step_inc_cnt,
-                                                         (ucg_builtin_algo_config.kmtree == 1 && ucg_builtin_algo_config.topo_level && ppx != 1) ? ppx * SPN : ppx, topo_params);
+                                                         (ucg_builtin_algo_config.kmtree == 1 && ucg_builtin_algo_config.topo_level && ppx != 1) ?
+                                                         ppx * SPN : ppx, topo_params);
         }
         if (status != UCS_OK) {
             return status;
@@ -1495,8 +1497,9 @@ static ucs_status_t ucg_builtin_topo_tree_build(const ucg_builtin_binomial_tree_
     }
 
     ucs_info("bmtree %u kmtree %u kmtree_intra %u recur %u bruck %u topo %u level %u ring %u pipe %u",
-             ucg_builtin_algo_config.bmtree, ucg_builtin_algo_config.kmtree, ucg_builtin_algo_config.kmtree_intra, ucg_builtin_algo_config.recursive, ucg_builtin_algo_config.bruck,
-             ucg_builtin_algo_config.topo, (unsigned)ucg_builtin_algo_config.topo_level, ucg_builtin_algo_config.ring, ucg_builtin_algo_config.pipeline);
+             ucg_builtin_algo_config.bmtree, ucg_builtin_algo_config.kmtree, ucg_builtin_algo_config.kmtree_intra,
+             ucg_builtin_algo_config.recursive,ucg_builtin_algo_config.bruck, ucg_builtin_algo_config.topo,
+             (unsigned)ucg_builtin_algo_config.topo_level, ucg_builtin_algo_config.ring, ucg_builtin_algo_config.pipeline);
 
     /* construct member list when topo_aware */
     size_t alloc_size = sizeof(ucg_group_member_index_t) * (*ppx);
@@ -1589,7 +1592,8 @@ static ucs_status_t ucg_builtin_tree_build(const ucg_builtin_binomial_tree_param
     } else {
         /* create member_list for un-topo */
         size_t alloc_size = sizeof(ucg_group_member_index_t) * size;
-        ucg_group_member_index_t *member_list = (ucg_group_member_index_t *)(UCG_ALLOC_CHECK(alloc_size, "member list"));
+        ucg_group_member_index_t *member_list = (ucg_group_member_index_t *)
+                                                (UCG_ALLOC_CHECK(alloc_size, "member list"));
         memset(member_list, 0, alloc_size);
 
         ucg_group_member_index_t member_idx;
@@ -1669,7 +1673,8 @@ static ucs_status_t ucg_builtin_binomial_tree_build(const ucg_builtin_binomial_t
     tree->super.my_index = rank;
 
     /* topology information obtain from ompi layer */
-    ucg_builtin_topology_info_params_t *topo_params = (ucg_builtin_topology_info_params_t *)UCG_ALLOC_CHECK(sizeof(ucg_builtin_topology_info_params_t), "topo params");
+    ucg_builtin_topology_info_params_t *topo_params = (ucg_builtin_topology_info_params_t *)
+                                                      UCG_ALLOC_CHECK(sizeof(ucg_builtin_topology_info_params_t), "topo params");
     status = ucg_builtin_topology_info_create(topo_params, params->group_params, params->root);
     if (status != UCS_OK) {
         ucg_builtin_binomial_tree_free_topo_info(&topo_params);
