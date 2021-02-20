@@ -278,11 +278,11 @@ static UCS_F_ALWAYS_INLINE ucs_status_t ucg_builtin_step_am_zcopy_max(ucg_builti
         send_buffer               = step->non_contig.contig_buffer;
     }
 
-    ucg_offset_t frag_size      = step->fragment_length;
-    void* iov_buffer_limit      = send_buffer + step->buffer_length - frag_size;
-    unsigned zcomp_index        = step->iter_ep * step->fragments +
+    ucg_offset_t frag_size     = step->fragment_length;
+    void* iov_buffer_limit     = send_buffer + step->buffer_length - frag_size;
+    unsigned zcomp_index       = step->iter_ep * step->fragments +
                                   step->iter_offset / step->fragment_length;
-    ucg_builtin_zcomp_t *zcomp  = &step->zcopy.zcomp[zcomp_index];
+    ucg_builtin_zcomp_t *zcomp = &step->zcopy.zcomp[zcomp_index];
     ucs_status_t (*ep_am_zcopy)(uct_ep_h, uint8_t, const void*, unsigned,
             const uct_iov_t*, size_t, unsigned, uct_completion_t*) =
                     step->uct_iface->ops.ep_am_zcopy;
@@ -700,7 +700,7 @@ ucs_status_t ucg_builtin_step_set_contig(ucg_builtin_op_step_t *step,
     if (step->flags & UCG_BUILTIN_OP_STEP_FLAG_SEND_AM_ZCOPY) {
         /* The send buffer changed, reregister it */
         uct_md_mem_dereg(step->uct_md, step->zcopy.memh);
-        status = uct_md_mem_reg(step->uct_md, step->non_contig.contig_buffer, 
+        status = uct_md_mem_reg(step->uct_md, step->non_contig.contig_buffer,
                                 step->buffer_length, UCT_MD_MEM_ACCESS_ALL, &step->zcopy.memh);
         if (status != UCS_OK) {
             if (step->zcopy.zcomp != NULL) {
@@ -1119,7 +1119,8 @@ ucs_status_t ucg_builtin_step_create(ucg_builtin_plan_phase_t *phase,
 
         step->buf_len_unit   = step->buffer_length; // for ring init
         step->buffer_length = params->send.dt_len * quotient;
-        num_offset_blocks = (ucg_builtin_my_idx - phase->step_index + UCG_BUILTIN_NUM_PROCS_DOUBLE * ucg_builtin_num_procs) % ucg_builtin_num_procs;
+        num_offset_blocks = (ucg_builtin_my_idx - phase->step_index + UCG_BUILTIN_NUM_PROCS_DOUBLE *
+                            ucg_builtin_num_procs) % ucg_builtin_num_procs;
         send_position = num_offset_blocks + 1;
         recv_position = (num_offset_blocks - 1 + ucg_builtin_num_procs) % ucg_builtin_num_procs + 1;
 

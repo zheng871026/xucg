@@ -276,7 +276,7 @@ am_handler_store:
         /* Failure return may result in hang up */
         ucs_assert_always(desc != NULL);
         memcpy(&desc->header, data, length);
-        desc->release_desc = slot->mp != NULL ? ucs_mpool_put_inline : free;
+        desc->release_desc = (slot->mp != NULL) ? ucs_mpool_put_inline : free;
         status = UCS_OK;
     }
 
@@ -327,7 +327,8 @@ void ucg_builtin_plan_decision_in_unsupport_allreduce_case_check_msg_size(const 
 {
     if (msg_size < UCG_GROUP_MED_MSG_SIZE) {
         /* Node-aware Recursive */
-        ucg_builtin_allreduce_algo_switch(UCG_ALGORITHM_ALLREDUCE_NODE_AWARE_RECURSIVE_AND_BMTREE, &ucg_builtin_algo_config);
+        ucg_builtin_allreduce_algo_switch(UCG_ALGORITHM_ALLREDUCE_NODE_AWARE_RECURSIVE_AND_BMTREE,
+                                          &ucg_builtin_algo_config);
     } else {
         /* Ring */
         ucg_builtin_allreduce_algo_switch(UCG_ALGORITHM_ALLREDUCE_RING, &ucg_builtin_algo_config);
@@ -1130,7 +1131,7 @@ ucs_status_t ucg_builtin_connect(ucg_builtin_planner_ctx_t *ctx,
     phase->md      = ucg_ep.md;
     phase->md_attr = ucg_ep.md_attr;
 
-   if (phase->ucp_eps == NULL) {
+    if (phase->ucp_eps == NULL) {
         phase->ucp_eps = UCG_ALLOC_CHECK(sizeof(ucp_ep_h) * phase->ep_cnt, "ucp_eps");
     }
 
@@ -1463,10 +1464,8 @@ err_free_ctx:
 static void ucg_builtin_cleanup(ucg_planc_ctx_h ctx)
 {
     ucg_builtin_ctx_t *bctx = (ucg_builtin_ctx_t*)ctx;
-    /* TODO: Find a good way to unset am handler
-     * Currently, this function is invoked only when the process exits.
-     * So it's OK not to unset am handler.
-     */
+    /* Currently, this function is invoked only when the process exits.
+     * So it's OK not to unset am handler. */
 
     ucs_ptr_array_cleanup(&bctx->group_by_id);
     ucs_config_parser_release_opts(&bctx->config, ucg_builtin_config_table);

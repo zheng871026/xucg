@@ -60,8 +60,8 @@ err:
 static int ucg_str_array_find(char **array, unsigned count, char *str)
 {
     int i;
-    for(i = 0; i < count; ++i) {
-        if (0 == strcmp(array[i], str)) {
+    for (i = 0; i < count; ++i) {
+        if (strcmp(array[i], str) == 0) {
             return 1;
         }
     }
@@ -172,7 +172,7 @@ static ucs_status_t ucg_init_planc_context(ucg_context_h context)
 
     ucs_status_t status;
     ucg_planner_h planner;
-    int i =0;
+    int i = 0;
     ucs_list_for_each(planner, &context->planners_head, list) {
         status = planner->plan_component->init(context, &(context->planc_ctx[i++]));
         if (status != UCS_OK) {
@@ -203,13 +203,13 @@ ucs_status_t ucg_init_version(unsigned api_major_version,
 
     if ((api_major_version != major_version) ||
         (api_major_version == major_version &&
-         api_minor_version > minor_version)) {
+        api_minor_version > minor_version)) {
         ucs_debug_address_info_t addr_info;
         status = ucs_debug_lookup_address(ucg_init_version, &addr_info);
         ucs_warn("UCG version is incompatible, required: %d.%d, actual: %d.%d (release %d %s)",
-                  api_major_version, api_minor_version,
-                  major_version, minor_version, release_version,
-                  status == UCS_OK ? addr_info.file.path : "");
+                 api_major_version, api_minor_version,
+                 major_version, minor_version, release_version,
+                 (status == UCS_OK) ? addr_info.file.path : "");
     }
 
     ucg_context_t *context = ucs_calloc(1, sizeof(ucg_context_t), "ucg context");

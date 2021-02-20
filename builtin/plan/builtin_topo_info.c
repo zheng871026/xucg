@@ -12,7 +12,6 @@
 #include <uct/api/uct_def.h>
 
 
-
 /* find my own rank */
 ucs_status_t ucg_builtin_find_myself(const ucg_group_params_t *group_params,
                                      ucg_group_member_index_t *myrank)
