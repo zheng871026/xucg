@@ -220,8 +220,8 @@ ucs_status_t ucg_builtin_recursive_connect(ucg_builtin_planner_ctx_t *ctx,
                                            unsigned check_swap,
                                            ucg_builtin_plan_t *recursive);
 
-ucs_status_t ucg_builtin_recursive_compute_steps(ucg_group_member_index_t my_index_local,
-                                                 unsigned rank_count, unsigned factor, unsigned *steps);
+void ucg_builtin_recursive_compute_steps(ucg_group_member_index_t my_index_local,
+                                         unsigned rank_count, unsigned factor, unsigned *steps);
 
 
 typedef struct ucg_builtin_bruck_config {
@@ -246,7 +246,7 @@ ucs_status_t ucg_topo_neighbor_create(ucg_builtin_planner_ctx_t *ctx,
                                       const ucg_collective_type_t *coll_type,
                                       ucg_builtin_plan_t **plan_p);
 
-ucs_status_t choose_distance_from_topo_aware_level(enum ucg_group_member_distance *domain_distance);
+void choose_distance_from_topo_aware_level(enum ucg_group_member_distance *domain_distance);
 
 /***************************** Topology information *****************************/
 typedef struct ucg_builtin_topology_info_params {
@@ -266,11 +266,11 @@ void ucg_builtin_msg_dump(void *arg, uct_am_trace_type_t type,
                           uint8_t id, const void *data, size_t length,
                           char *buffer, size_t max);
 
-ucs_status_t ucg_builtin_bcast_algo_switch(const enum ucg_builtin_bcast_algorithm bcast_algo_decision, struct ucg_builtin_algorithm *algo);
+void ucg_builtin_bcast_algo_switch(const enum ucg_builtin_bcast_algorithm bcast_algo_decision, struct ucg_builtin_algorithm *algo);
 
-ucs_status_t ucg_builtin_barrier_algo_switch(const enum ucg_builtin_barrier_algorithm barrier_algo_decision, struct ucg_builtin_algorithm *algo);
+void ucg_builtin_barrier_algo_switch(const enum ucg_builtin_barrier_algorithm barrier_algo_decision, struct ucg_builtin_algorithm *algo);
 
-ucs_status_t ucg_builtin_allreduce_algo_switch(const enum ucg_builtin_allreduce_algorithm allreduce_algo_decision, struct ucg_builtin_algorithm *algo);
+void ucg_builtin_allreduce_algo_switch(const enum ucg_builtin_allreduce_algorithm allreduce_algo_decision, struct ucg_builtin_algorithm *algo);
 
 ucs_status_t ucg_builtin_check_ppn(const ucg_group_params_t *group_params,
                                    unsigned *unequal_ppn);

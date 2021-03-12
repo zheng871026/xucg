@@ -76,11 +76,11 @@ enum ucg_builtin_tree_direction {
     UCG_PLAN_RIGHT_MOST_TREE
 };
 
-static ucs_status_t ucg_builtin_bmtree_algo_build_left(unsigned rank,
-                                                       unsigned root,
-                                                       unsigned size,
-                                                       ucg_group_member_index_t *up, unsigned *up_cnt,
-                                                       ucg_group_member_index_t *down, unsigned *down_cnt)
+static void ucg_builtin_bmtree_algo_build_left(unsigned rank,
+                                               unsigned root,
+                                               unsigned size,
+                                               ucg_group_member_index_t *up, unsigned *up_cnt,
+                                               ucg_group_member_index_t *down, unsigned *down_cnt)
 {
     ucs_assert(size > 0);
 
@@ -114,14 +114,13 @@ static ucs_status_t ucg_builtin_bmtree_algo_build_left(unsigned rank,
     }
 
     *down_cnt = num_child;
-    return UCS_OK;
 }
 
-static ucs_status_t ucg_builtin_bmtree_algo_build_right(unsigned rank,
-                                                        unsigned root,
-                                                        unsigned size,
-                                                        ucg_group_member_index_t *up, unsigned *up_cnt,
-                                                        ucg_group_member_index_t *down, unsigned *down_cnt)
+static void ucg_builtin_bmtree_algo_build_right(unsigned rank,
+                                                unsigned root,
+                                                unsigned size,
+                                                ucg_group_member_index_t *up, unsigned *up_cnt,
+                                                ucg_group_member_index_t *down, unsigned *down_cnt)
 {
     ucs_assert(size > 0);
 
@@ -150,7 +149,6 @@ static ucs_status_t ucg_builtin_bmtree_algo_build_right(unsigned rank,
     }
 
     *down_cnt = num_child;
-    return UCS_OK;
 }
 
 
@@ -204,10 +202,10 @@ ucs_status_t ucg_builtin_bmtree_algo_build(const ucg_group_member_index_t *membe
     /* Notes: rank & root both correpsonds index in member_list */
     if (direction == UCG_PLAN_LEFT_MOST_TREE) {
         /* left-most Binomial Tree */
-        (void)ucg_builtin_bmtree_algo_build_left(rank, root, size, up, up_cnt, down, down_cnt);
+        ucg_builtin_bmtree_algo_build_left(rank, root, size, up, up_cnt, down, down_cnt);
     } else if (direction == UCG_PLAN_RIGHT_MOST_TREE) {
         /* right-most Binomial Tree */
-        (void)ucg_builtin_bmtree_algo_build_right(rank, root, size, up, up_cnt, down, down_cnt);
+        ucg_builtin_bmtree_algo_build_right(rank, root, size, up, up_cnt, down, down_cnt);
     } else {
         ucs_error("Invaild tree direction");
         return UCS_ERR_INVALID_PARAM;
@@ -350,15 +348,17 @@ ucs_status_t ucg_builtin_kmtree_algo_build(const ucg_group_member_index_t *membe
 
     if (direction == UCG_PLAN_LEFT_MOST_TREE) {
         /* leftmost k-nomial tree for fanout */
-        (void)ucg_builtin_kmtree_algo_build_left(rank, root, size, degree, up, up_cnt, down, down_cnt);
+        status = ucg_builtin_kmtree_algo_build_left(rank, root, size, degree, up, up_cnt, down, down_cnt);
     } else if (direction == UCG_PLAN_RIGHT_MOST_TREE) {
         /* right-most k-nomial tree for fanin */
-        (void)ucg_builtin_kmtree_algo_build_right(rank, root, size, degree, up, up_cnt, down, down_cnt);
+        status = ucg_builtin_kmtree_algo_build_right(rank, root, size, degree, up, up_cnt, down, down_cnt);
     } else {
         ucs_error("Invaild tree direction");
         return UCS_ERR_INVALID_PARAM;
     }
-
+    if (status != UCS_OK) {
+        return status;
+    }
     unsigned idx;
     /* convert index to real rank */
     for (idx = 0; idx < *up_cnt; idx++) {
@@ -509,17 +509,15 @@ static void ucg_builtin_get_node_leaders_normal_level(ucg_group_member_index_t m
     }
 }
 
-static ucs_status_t ucg_builtin_get_node_leaders(const uint16_t *node_index, ucg_group_member_index_t member_count,
-                                                 enum ucg_group_hierarchy_level level, unsigned ppx,
-                                                 ucg_group_member_index_t *leaders)
+static void ucg_builtin_get_node_leaders(const uint16_t *node_index, ucg_group_member_index_t member_count,
+                                         enum ucg_group_hierarchy_level level, unsigned ppx,
+                                         ucg_group_member_index_t *leaders)
 {
     if (level == UCG_GROUP_HIERARCHY_LEVEL_NODE) {
         ucg_builtin_get_node_leaders_node_level(node_index, member_count, ppx, leaders);
     } else {
         ucg_builtin_get_node_leaders_normal_level(member_count, ppx, leaders);
     }
-
-    return UCS_OK;
 }
 
 static ucs_status_t ucg_builtin_tree_inter_fanin_connect(const ucg_builtin_binomial_tree_params_t *params,
@@ -853,9 +851,9 @@ static ucs_status_t ucg_builtin_binomial_tree_inter_create(enum ucg_builtin_plan
                 unsigned phs_cnt = tree->phs_cnt;
                 ucg_group_member_index_t *node_leaders = UCG_ALLOC_CHECK(node_count * sizeof(ucg_group_member_index_t),
                                                                          "recursive ranks");
-                (void)ucg_builtin_get_node_leaders(params->group_params->node_index,
-                                                   params->group_params->member_count,
-                                                   ucg_builtin_algo_config.topo_level, ppx, node_leaders);
+                ucg_builtin_get_node_leaders(params->group_params->node_index,
+                                             params->group_params->member_count,
+                                             ucg_builtin_algo_config.topo_level, ppx, node_leaders);
                 ucg_builtin_recursive_connect(params->ctx, my_index, node_leaders, node_count, factor, 0, tree);
                 *phs_inc_cnt = tree->phs_cnt - phs_cnt;
                 ucs_free(node_leaders);
@@ -863,7 +861,7 @@ static ucs_status_t ucg_builtin_binomial_tree_inter_create(enum ucg_builtin_plan
             } else {
                 *phs_inc_cnt = 0;
             }
-            (void)ucg_builtin_recursive_compute_steps(my_index_local, node_count, factor, step_inc_cnt);
+            ucg_builtin_recursive_compute_steps(my_index_local, node_count, factor, step_inc_cnt);
             ucs_debug("phase inc: %d step inc: %d", *phs_inc_cnt, *step_inc_cnt);
             break;
         case UCG_PLAN_TREE_FANIN_FANOUT: /* for inter allreduce, another choice is reduce+bcast with k-nominal tree */
@@ -1482,10 +1480,7 @@ static ucs_status_t ucg_builtin_topo_tree_build(const ucg_builtin_binomial_tree_
             ucs_info("Warning: process number in every socket must be same in socket-aware algorithm, please make sure ppn "
                     "must be even and '--map-by socket' included. Switch to corresponding node-aware algorithm already.");
             ucg_builtin_algo_config.topo_level = UCG_GROUP_HIERARCHY_LEVEL_NODE;
-            status = choose_distance_from_topo_aware_level(&domain_distance);
-            if (status != UCS_OK) {
-                return status;
-            }
+            choose_distance_from_topo_aware_level(&domain_distance);
             *ppx = *ppn;
         }
     }
@@ -1493,7 +1488,7 @@ static ucs_status_t ucg_builtin_topo_tree_build(const ucg_builtin_binomial_tree_
     /* case 2 */
     if (ucg_builtin_algo_config.topo_level == UCG_GROUP_HIERARCHY_LEVEL_SOCKET && ucg_builtin_algo_config.kmtree && (*ppx == 1 || *pps == *ppn)) {
         ucg_builtin_algo_config.topo_level = UCG_GROUP_HIERARCHY_LEVEL_NODE;
-        status = choose_distance_from_topo_aware_level(&domain_distance);
+        choose_distance_from_topo_aware_level(&domain_distance);
         *ppx = *ppn;
     }
 
@@ -1583,7 +1578,7 @@ static ucs_status_t ucg_builtin_tree_build(const ucg_builtin_binomial_tree_param
         /* socket-aware:  ppx = pps (processes per socket) */
         /* L3cache-aware: ppx = ppl (processes per L3cache) */
         enum ucg_group_member_distance domain_distance = UCG_GROUP_MEMBER_DISTANCE_HOST;
-        status = choose_distance_from_topo_aware_level(&domain_distance);
+        choose_distance_from_topo_aware_level(&domain_distance);
         *ppx = ucg_builtin_calculate_ppx(params->group_params, domain_distance);
         *ppn = ucg_builtin_calculate_ppx(params->group_params, UCG_GROUP_MEMBER_DISTANCE_HOST);
         *pps = ucg_builtin_calculate_ppx(params->group_params, UCG_GROUP_MEMBER_DISTANCE_SOCKET);
