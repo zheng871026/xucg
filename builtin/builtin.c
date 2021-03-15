@@ -508,8 +508,8 @@ static void ucg_builtin_init_algo(struct ucg_builtin_algorithm *algo)
     algo->feature_flag = UCG_ALGORITHM_SUPPORT_COMMON_FEATURE;
 }
 
-ucs_status_t ucg_builtin_bcast_algo_switch(const enum ucg_builtin_bcast_algorithm bcast_algo_decision,
-                                           struct ucg_builtin_algorithm *algo)
+void ucg_builtin_bcast_algo_switch(const enum ucg_builtin_bcast_algorithm bcast_algo_decision,
+                                   struct ucg_builtin_algorithm *algo)
 {
     algo->topo_level = UCG_GROUP_HIERARCHY_LEVEL_NODE;
     algo->feature_flag |= UCG_ALGORITHM_SUPPORT_BIND_TO_NONE;
@@ -535,11 +535,10 @@ ucs_status_t ucg_builtin_bcast_algo_switch(const enum ucg_builtin_bcast_algorith
             ucg_builtin_bcast_algo_switch(UCG_ALGORITHM_BCAST_NODE_AWARE_KMTREE, algo);
             break;
     }
-    return UCS_OK;
 }
 
-ucs_status_t ucg_builtin_barrier_algo_switch(const enum ucg_builtin_barrier_algorithm barrier_algo_decision,
-                                             struct ucg_builtin_algorithm *algo)
+void ucg_builtin_barrier_algo_switch(const enum ucg_builtin_barrier_algorithm barrier_algo_decision,
+                                     struct ucg_builtin_algorithm *algo)
 {
     algo->topo_level = UCG_GROUP_HIERARCHY_LEVEL_NODE;
     algo->bruck = 1;
@@ -582,11 +581,10 @@ ucs_status_t ucg_builtin_barrier_algo_switch(const enum ucg_builtin_barrier_algo
             ucg_builtin_barrier_algo_switch(UCG_ALGORITHM_BARRIER_NODE_AWARE_KMTREE, algo);
             break;
     }
-    return UCS_OK;
 }
 
-ucs_status_t ucg_builtin_allreduce_algo_switch(const enum ucg_builtin_allreduce_algorithm allreduce_algo_decision,
-                                               struct ucg_builtin_algorithm *algo)
+void ucg_builtin_allreduce_algo_switch(const enum ucg_builtin_allreduce_algorithm allreduce_algo_decision,
+                                       struct ucg_builtin_algorithm *algo)
 {
     algo->topo_level = UCG_GROUP_HIERARCHY_LEVEL_NODE;
     algo->bruck = 1;
@@ -640,7 +638,6 @@ ucs_status_t ucg_builtin_allreduce_algo_switch(const enum ucg_builtin_allreduce_
             ucg_builtin_allreduce_algo_switch(UCG_ALGORITHM_ALLREDUCE_NODE_AWARE_KMTREE, algo);
             break;
     }
-    return UCS_OK;
 }
 
 void ucg_builtin_check_algorithm_param_size(ucg_builtin_config_t *config)
@@ -796,7 +793,7 @@ ucs_status_t ucg_builtin_check_continuous_number(const ucg_group_params_t *group
     return UCS_OK;
 }
 
-ucs_status_t choose_distance_from_topo_aware_level(enum ucg_group_member_distance *domain_distance)
+void choose_distance_from_topo_aware_level(enum ucg_group_member_distance *domain_distance)
 {
     switch (ucg_builtin_algo_config.topo_level) {
         case UCG_GROUP_HIERARCHY_LEVEL_NODE:
@@ -811,7 +808,6 @@ ucs_status_t choose_distance_from_topo_aware_level(enum ucg_group_member_distanc
         default:
             break;
     }
-    return UCS_OK;
 }
 
 void ucg_builtin_non_commutative_operation(const ucg_group_params_t *group_params, const ucg_collective_params_t *coll_params, struct ucg_builtin_algorithm *algo, const size_t msg_size)
@@ -921,7 +917,7 @@ static ucs_status_t ucg_builtin_change_unsupport_algo(struct ucg_builtin_algorit
     /* Special Case 3 : discontinuous rank */
     unsigned is_discontinuous_rank = 0;
     enum ucg_group_member_distance domain_distance = UCG_GROUP_MEMBER_DISTANCE_HOST;
-    status = choose_distance_from_topo_aware_level(&domain_distance);
+    choose_distance_from_topo_aware_level(&domain_distance);
     if (status != UCS_OK) {
         return status;
     }
@@ -1041,7 +1037,7 @@ ucs_status_t ucg_builtin_algorithm_decision(const ucg_builtin_planner_ctx_t *ctx
                                                config);
     ucg_builtin_log_algo();
 
-    return UCS_OK;
+    return status;
 }
 
 static void ucg_builtin_set_phase_thresh_max_short(ucg_builtin_planner_ctx_t *ctx,

@@ -91,7 +91,7 @@ static ucs_status_t ucg_builtin_recursive_non_pow_two_post(ucg_builtin_planner_c
     return status;
 }
 
-static ucs_status_t ucg_builtin_check_swap(unsigned factor, ucg_step_idx_t step_idx,
+static void ucg_builtin_check_swap(unsigned factor, ucg_step_idx_t step_idx,
                                            ucg_group_member_index_t my_index, ucg_builtin_plan_phase_t *phase)
 {
     /* The condition which don't use peer_idx as considering communicator split and dup case */
@@ -105,8 +105,6 @@ static ucs_status_t ucg_builtin_check_swap(unsigned factor, ucg_step_idx_t step_
     } else {
         phase->is_swap = 0;
     }
-
-    return UCS_OK;
 }
 
 static ucs_status_t ucg_builtin_recursive_non_pow_two_inter(ucg_builtin_planner_ctx_t *ctx,
@@ -136,7 +134,7 @@ static ucs_status_t ucg_builtin_recursive_non_pow_two_inter(ucg_builtin_planner_
 #endif
 
             if (check_swap) {
-                (void)ucg_builtin_check_swap(factor, idx, new_my_index, (*phase));
+                ucg_builtin_check_swap(factor, idx, new_my_index, (*phase));
             }
             /* In each step, there are one or more peers */
             unsigned step_peer_idx;
@@ -278,7 +276,7 @@ static ucs_status_t ucg_builtin_recursive_pow_two(ucg_builtin_planner_ctx_t *ctx
 #endif
 
         if (check_swap) {
-            (void)ucg_builtin_check_swap(factor, step_idx, my_index, phase);
+            ucg_builtin_check_swap(factor, step_idx, my_index, phase);
         }
         /* In each step, there are one or more peers */
         unsigned step_peer_idx;
@@ -356,7 +354,7 @@ ucs_status_t ucg_builtin_recursive_connect(ucg_builtin_planner_ctx_t *ctx,
     return status;
 }
 
-ucs_status_t ucg_builtin_recursive_compute_steps(ucg_group_member_index_t my_index_local, unsigned rank_count,
+void ucg_builtin_recursive_compute_steps(ucg_group_member_index_t my_index_local, unsigned rank_count,
                                                  unsigned factor, unsigned *steps)
 {
     unsigned step_size = 1;
@@ -391,8 +389,6 @@ ucs_status_t ucg_builtin_recursive_compute_steps(ucg_group_member_index_t my_ind
     }
 
     *steps = (step_size != rank_count) ? (near_power_of_two_step + NUM_TWO) : step_idx;
-
-    return UCS_OK;
 }
 
 void ucg_builtin_recursive_init_member_list(ucg_group_member_index_t member_cnt, ucg_group_member_index_t *member_list)
